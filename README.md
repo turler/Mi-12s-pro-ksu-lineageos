@@ -20,17 +20,81 @@ android-root-bundle/
 │   │                                  SHA256: afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db
 │   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
 ├── modules/
-│   ├── NeoZygisk-v2.4-289-release.zip    ← injector Zygisk (thay BreZygisk) — trị MB Bank
-│   └── vneid_persist-v2.1.zip            ← module dọn prop + nạp sus_path lúc boot
-└── patches/
-    ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
-    ├── 0002-susfs-wildcard-cusrom-untrusted-app.patch                   ← patch wildcard ẩn ROM (v3)
-    └── KERNEL_PATCH_REVIEW.md            ← review hard của patch wildcard
-SHA256SUMS                           ← hash verify toàn bộ artifact
+│   └── vneid_persist-v2.1.zip            ← module tự viết: dọn prop + nạp sus_path (chỉ có ở repo này)
+├── patches/
+│   ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
+│   ├── 0002-susfs-wildcard-cusrom-untrusted-app.patch                   ← patch wildcard ẩn ROM (v3)
+│   └── KERNEL_PATCH_REVIEW.md            ← review hard của patch wildcard
+└── SHA256SUMS                       ← hash verify toàn bộ artifact
 ```
 
-> Mã nguồn kernel đã patch nằm ở `~/kbuild/kernel` trên cùng máy WSL này. Build lại bằng
-> `~/kbuild/build.sh` (xem REPORT.md / BRIEF.md trong `~/kbuild`).
+### Tự build lại kernel (tuỳ chọn)
+
+File `boot_ksun_susfs_v3.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
+hoặc khi LineageOS đổi kernel) thì làm như sau trên Linux x86_64:
+
+1. **Lấy source kernel LineageOS cho unicorn**, đúng commit mà ROM stock đang chạy
+   (`uname -r` trên máy ra `5.10.269-gki-geff4b40407a1`, tức commit `eff4b4040`):
+   ```
+   git clone https://github.com/LineageOS/android_kernel_xiaomi_sm8450 kernel
+   cd kernel && git checkout eff4b4040
+   ```
+2. **Áp 2 patch trong thư mục `patches/`** theo thứ tự:
+   ```
+   git am ../patches/0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch
+   git apply ../patches/0002-susfs-wildcard-cusrom-untrusted-app.patch
+   ```
+   - `0001`: ghép KernelSU-Next v3.4.2 + SuSFS v2.3.0
+   - `0002`: patch wildcard của SuSFS để ẩn file ROM (`*lineage*`) khỏi app người dùng
+3. **Toolchain:** AOSP clang `r596125` (prebuilt Clang của Android, tải từ
+   `android.googlesource.com/platform/prebuilts/clang/host/linux-x86`), cho vào `PATH`.
+4. **Build `Image`** (GKI defconfig + các fragment vendor của unicorn):
+   ```
+   M="make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang TARGET_PRODUCT=unicorn"
+   $M gki_defconfig
+   scripts/kconfig/merge_config.sh -m -O out out/.config \
+     arch/arm64/configs/vendor/waipio_GKI.config \
+     arch/arm64/configs/vendor/xiaomi_GKI.config \
+     arch/arm64/configs/vendor/unicorn_GKI.config \
+     arch/arm64/configs/vendor/debugfs.config
+   $M olddefconfig
+   $M -j$(nproc) Image
+   ```
+5. **Đóng gói vào boot.img:** lấy `boot.img` stock trích từ ROM LineageOS, rồi chỉ thay mỗi kernel
+   bằng `magiskboot`:
+   ```
+   magiskboot unpack boot.img
+   cp out/arch/arm64/boot/Image kernel
+   magiskboot repack boot.img boot_new.img
+   ```
+6. **Kiểm tra ABI trước khi flash:** so `vmlinux.symvers` của bản build có patch với bản build
+   không patch (cùng commit) — phải ra **0 dòng khác** thì các module vendor (`.ko` trong
+   `vendor_dlkm`: Wi-Fi, camera, DSP...) mới nạp được. Lệch ABI là máy mất Wi-Fi/camera hoặc
+   không boot.
+
+> Luôn `fastboot boot boot_new.img` để chạy thử trên RAM trước khi flash cố định.
+
+---
+
+### Module bên thứ ba (dùng nguyên bản — tải từ nguồn chính thức)
+
+Repo này chỉ chứa những thứ **đã tự sửa/tự viết** (kernel, patch, `vneid_persist`). Các module dưới
+đây dùng nguyên bản, tải bản release mới nhất từ trang gốc:
+
+| Module | Vai trò | Nguồn | Bản đã test |
+|---|---|---|---|
+| KernelSU-Next (manager) | Root, quản lý module | https://github.com/KernelSU-Next/KernelSU-Next/releases | v3.4.2 |
+| SuSFS (tham khảo, đã ghép vào kernel) | Ẩn path/mount/maps ở kernel | https://gitlab.com/simonpunk/susfs4ksu | v2.3.0 |
+| **NeoZygisk** | Injector Zygisk, che dấu `atexit` | https://github.com/JingMatrix/NeoZygisk/releases | v2.4 (289) |
+| BRENE | Cấp `ksu_susfs`, ẩn mount, spoof uname | https://github.com/rrr333nnn333/BRENE/releases | — |
+| HMA-OSS (Hide My Applist) | Ẩn danh sách app (cần Zygisk) | https://github.com/frknkrc44/HMA-OSS/releases | — |
+| Tricky Store | Keybox / key attestation | https://github.com/5ec1cff/TrickyStore/releases | — |
+| TEESimulator (AlwaysStrong dùng) | Giả lập TEE theo từng app | https://github.com/JingMatrix/TEESimulator | — |
+| Mountify | Meta-module mount | https://github.com/backslashxx/mountify/releases | — |
+| LSPosed Vector (tuỳ chọn) | Framework Xposed | https://github.com/JingMatrix/Vector/releases | — |
+
+> AlwaysStrong là bộ đóng gói Tricky Store/TEESimulator; tôi dùng bản cộng đồng — nếu không tìm được
+> bản tin cậy thì dùng thẳng Tricky Store ở trên, cấu hình `target.txt` như mục 4.
 
 ---
 
@@ -70,7 +134,7 @@ fastboot flash boot_b kernel/boot_ksun_susfs_v3.img
 ### Bước 2 — Root modules cơ bản (qua KernelSU Manager)
 Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
 1. **BRENE** — bật, vào app TẮT toàn bộ tab ROM (`=0`).
-2. **NeoZygisk** (`modules/NeoZygisk-v2.4-289-release.zip`) — injector Zygisk.
+2. **NeoZygisk** (tải từ https://github.com/JingMatrix/NeoZygisk/releases, bản đã test v2.4-289) — injector Zygisk.
    - Nếu máy đang có BreZygisk/ReZygisk: `touch /data/adb/modules/rezygisk/disable` trước, rồi cài NeoZygisk, reboot.
 3. **HMA-OSS** — module Zygisk ẩn app list.
 4. **Tricky Store** (AlwaysStrong) — keybox attestation.
@@ -139,7 +203,7 @@ Kiểm tra: `pgrep -f vneid_persist/prop_watch.sh` (phải ra đúng 1 pid), log
 ## 6. OTA LineageOS — QUAN TRỌNG
 Auto-OTA đã **tắt 3 lớp** (`org.lineageos.updater` disabled-user, `ota_disable_automatic_update=1`,
 `auto_updates_check_interval=0`). OTA sẽ ghi đè `boot.img` → mất KernelSU+SuSFS+wildcard. Khi muốn
-update: làm **manual**, và nếu commit kernel đổi thì **build lại kernel** từ `~/kbuild/kernel`
+update: làm **manual**, và nếu commit kernel đổi thì **build lại kernel** theo mục *Tự build lại kernel* ở trên (đổi sang commit kernel mới của LineageOS, áp lại 2 patch)
 (coi chừng lệch ABI `.ko`).
 
 ---
