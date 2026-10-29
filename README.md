@@ -88,13 +88,9 @@ Repo này chỉ chứa những thứ **đã tự sửa/tự viết** (kernel, pa
 | **NeoZygisk** | Injector Zygisk, che dấu `atexit` | https://github.com/JingMatrix/NeoZygisk/releases | v2.4 (289) |
 | BRENE | Cấp `ksu_susfs`, ẩn mount, spoof uname | https://github.com/rrr333nnn333/BRENE/releases | — |
 | HMA-OSS (Hide My Applist) | Ẩn danh sách app (cần Zygisk) | https://github.com/frknkrc44/HMA-OSS/releases | — |
-| Tricky Store | Keybox / key attestation | https://github.com/5ec1cff/TrickyStore/releases | — |
-| TEESimulator (AlwaysStrong dùng) | Giả lập TEE theo từng app | https://github.com/JingMatrix/TEESimulator | — |
+| **AlwaysStrong** (gồm Tricky Store + TEESimulator) | Keybox / key attestation, giả lập TEE theo từng app | https://gitlab.com/Evokerr/AlwaysStrong/-/releases | v1.0.5 |
 | Mountify | Meta-module mount | https://github.com/backslashxx/mountify/releases | — |
-| LSPosed Vector (tuỳ chọn) | Framework Xposed | https://github.com/JingMatrix/Vector/releases | — |
 
-> AlwaysStrong là bộ đóng gói Tricky Store/TEESimulator; tôi dùng bản cộng đồng — nếu không tìm được
-> bản tin cậy thì dùng thẳng Tricky Store ở trên, cấu hình `target.txt` như mục 4.
 
 ---
 
@@ -104,7 +100,7 @@ Thứ tự lớp phòng thủ của app và module trị từng lớp:
 
 | Lớp app kiểm tra | Module/giải pháp | Ghi chú |
 |---|---|---|
-| Play Integrity + Key Attestation (keybox) | **Tricky Store** (AlwaysStrong) | per-app target list |
+| Play Integrity + Key Attestation (keybox) | **AlwaysStrong** (Tricky Store + TEESimulator) | per-app target list |
 | File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v3.img` + module |
 | Ẩn mount, spoof uname, cấp `ksu_susfs` | **BRENE** | bật, tắt toàn bộ tab ROM |
 | Danh sách app / accessibility | **HMA-OSS** (Zygisk) | VNeID + bank chạy **Blacklist** |
@@ -112,8 +108,8 @@ Thứ tự lớp phòng thủ của app và module trị từng lớp:
 | Prop `ro.lineage.*`, `adb_root` | **vneid_persist** (service.sh) | dọn mỗi lần boot |
 
 Danh sách module đang BẬT trên máy (tham chiếu):
-`brene`, `hma_oss_zygisk`, `mountify`, `ohmyfont`, `tricky_store`, `vneid_persist`,
-`zygisk_vector` (LSPosed Vector), và `zygisksu` (**NeoZygisk** — thay `rezygisk` đã disable).
+`brene`, `hma_oss_zygisk`, `mountify`, `tricky_store` (AlwaysStrong), `vneid_persist`,
+và `zygisksu` (**NeoZygisk** — thay `rezygisk` đã disable).
 
 ---
 
@@ -137,7 +133,7 @@ Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
 2. **NeoZygisk** (tải từ https://github.com/JingMatrix/NeoZygisk/releases, bản đã test v2.4-289) — injector Zygisk.
    - Nếu máy đang có BreZygisk/ReZygisk: `touch /data/adb/modules/rezygisk/disable` trước, rồi cài NeoZygisk, reboot.
 3. **HMA-OSS** — module Zygisk ẩn app list.
-4. **Tricky Store** (AlwaysStrong) — keybox attestation.
+4. **AlwaysStrong** (https://gitlab.com/Evokerr/AlwaysStrong/-/releases) — gồm Tricky Store + TEESimulator, keybox attestation.
 5. **vneid_persist** (`modules/vneid_persist-v2.1.zip`) — dọn prop + sus_path.
 
 ### Bước 3 — Reboot, kiểm tra
@@ -156,8 +152,7 @@ chính injector Zygisk: module Zygisk đăng ký destructor qua `__cxa_atexit` �
 - BreZygisk/ReZygisk có ẩn `solist` nhưng vẫn lộ `atexit` dưới rule v12.
 - NeoZygisk v2.4 còn thêm chữ ký app-specialize cho **Android 17** (BreZygisk v1.0.0 không có).
 
-NeoZygisk nạp lại y nguyên các Zygisk module cũ (`tricky_store`, `hma_oss_zygisk`,
-`zygisk_vector`) — không cần cấu hình lại. Kernel SuSFS không bị đụng.
+NeoZygisk nạp lại y nguyên các Zygisk module cũ (`tricky_store`, `hma_oss_zygisk`) — không cần cấu hình lại. Kernel SuSFS không bị đụng.
 
 ---
 
