@@ -21,7 +21,7 @@ android-root-bundle/
 │   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
 ├── modules/
 │   ├── NeoZygisk-v2.4-289-release.zip    ← injector Zygisk (thay BreZygisk) — trị MB Bank
-│   └── vneid_persist-v2.0.zip            ← module dọn prop + nạp sus_path lúc boot
+│   └── vneid_persist-v2.1.zip            ← module dọn prop + nạp sus_path lúc boot
 └── patches/
     ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
     ├── 0002-susfs-wildcard-cusrom-untrusted-app.patch                   ← patch wildcard ẩn ROM (v3)
@@ -74,7 +74,7 @@ Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
    - Nếu máy đang có BreZygisk/ReZygisk: `touch /data/adb/modules/rezygisk/disable` trước, rồi cài NeoZygisk, reboot.
 3. **HMA-OSS** — module Zygisk ẩn app list.
 4. **Tricky Store** (AlwaysStrong) — keybox attestation.
-5. **vneid_persist** (`modules/vneid_persist-v2.0.zip`) — dọn prop + sus_path.
+5. **vneid_persist** (`modules/vneid_persist-v2.1.zip`) — dọn prop + sus_path.
 
 ### Bước 3 — Reboot, kiểm tra
 Mở VNeID, HSBC, MB Bank. Nếu lỗi, xem mục 4 (Trị theo từng app).
@@ -104,6 +104,12 @@ NeoZygisk nạp lại y nguyên các Zygisk module cũ (`tricky_store`, `hma_oss
   + 5 file `*debug*.rc`). Kernel v3 tự re-flag `path+map` mỗi lần Zygote fork app → miễn nhiễm
   `icache` eviction, không cần cron.
 - HMA: để **Blacklist**, preset `[custom_rom, root_apps, sus_apps, xposed]`.
+
+### VNeID lỗi 12 sau nhiều giờ uptime (prop tái sinh)
+`LineageSettingsService` tự tạo lại `sys.lineage_settings_system_version` lúc runtime (dọn lúc boot
+vẫn quay lại sau vài giờ) → VNeID lỗi 12. File `*lineage*@idmap` lúc đó vẫn ẩn tốt (ENOENT).
+Fix (v2.1): `prop_watch.sh` chạy nền 1 instance, cứ 60s xóa mọi prop `lineage|adb_root`.
+Kiểm tra: `pgrep -f vneid_persist/prop_watch.sh` (phải ra đúng 1 pid), log ở `last.log`.
 
 ### HSBC (`vn.hsbc.hsbcvietnam`) — Zimperium `android_serial_banning`
 - **GỠ** khỏi `/data/adb/tricky_store/target.txt`; khóa `vn.hsbc.hsbcvietnam	off` trong
