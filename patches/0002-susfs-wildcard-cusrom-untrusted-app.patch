@@ -1,0 +1,435 @@
+diff --git a/fs/namei.c b/fs/namei.c
+index fc364602c..6effed17c 100644
+--- a/fs/namei.c
++++ b/fs/namei.c
+@@ -51,6 +51,7 @@
+ 
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ extern bool susfs_is_inode_sus_path(struct inode *inode);
++extern bool susfs_is_dentry_sus_path(struct dentry *dentry);
+ extern const struct qstr susfs_fake_qstr_name;
+ #endif
+ #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+@@ -1536,7 +1537,7 @@ static struct dentry *lookup_dcache(const struct qstr *name,
+ 		}
+ 	}
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+-	if (dentry && !IS_ERR(dentry) && dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
++	if (dentry && !IS_ERR(dentry) && dentry->d_inode && susfs_is_dentry_sus_path(dentry)) {
+ 		if (d_in_lookup(dentry))
+ 			d_lookup_done(dentry);
+ 		dput(dentry);
+@@ -1583,7 +1584,7 @@ static struct dentry *__lookup_hash(const struct qstr *name,
+ 		dentry = old;
+ 	}
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+-	if (unlikely(dentry) && !IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_inode_sus_path(dentry->d_inode)) {
++	if (unlikely(dentry) && !IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_dentry_sus_path(dentry)) {
+ 		bool is_fuse = dentry->d_inode->i_sb->s_magic == FUSE_SUPER_MAGIC;
+ 
+ 		if (d_in_lookup(dentry))
+@@ -1612,7 +1613,7 @@ static struct dentry *lookup_fast(struct nameidata *nd,
+ 	struct dentry *dentry, *parent = nd->path.dentry;
+ 	int status = 1;
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+-	bool is_nd_state_lookup_last_and_open_last = (nd->state & (ND_STATE_LOOKUP_LAST | ND_STATE_OPEN_LAST));
++	(void)nd;
+ #endif
+ 
+ 	/*
+@@ -1624,8 +1625,8 @@ static struct dentry *lookup_fast(struct nameidata *nd,
+ 		unsigned seq;
+ 		dentry = __d_lookup_rcu(parent, &nd->last, &seq);
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+-		if (is_nd_state_lookup_last_and_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode &&
+-			susfs_is_inode_sus_path(dentry->d_inode))
++		if (dentry && !IS_ERR(dentry) && READ_ONCE(dentry->d_inode) &&
++			susfs_is_dentry_sus_path(dentry))
+ 		{
+ 			if (d_in_lookup(dentry))
+ 				d_lookup_done(dentry);
+@@ -1669,8 +1670,8 @@ static struct dentry *lookup_fast(struct nameidata *nd,
+ 	} else {
+ 		dentry = __d_lookup(parent, &nd->last);
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+-		if (is_nd_state_lookup_last_and_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode &&
+-			susfs_is_inode_sus_path(dentry->d_inode))
++		if (dentry && !IS_ERR(dentry) && READ_ONCE(dentry->d_inode) &&
++			susfs_is_dentry_sus_path(dentry))
+ 		{
+ 			if (d_in_lookup(dentry))
+ 				d_lookup_done(dentry);
+@@ -1701,7 +1702,6 @@ static struct dentry *__lookup_slow(const struct qstr *name,
+ 	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ 	bool found_sus_path = false;
+-	bool is_nd_flags_lookup_last = (flags & ND_FLAGS_LOOKUP_LAST);
+ #endif
+ 
+ 	/* Don't go there if it's already dead */
+@@ -1740,8 +1740,8 @@ static struct dentry *__lookup_slow(const struct qstr *name,
+ 		}
+ 	}
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+-	if (is_nd_flags_lookup_last && !found_sus_path && dentry && !IS_ERR(dentry) && dentry->d_inode &&
+-		susfs_is_inode_sus_path(dentry->d_inode))
++	if (!found_sus_path && dentry && !IS_ERR(dentry) && READ_ONCE(dentry->d_inode) &&
++		susfs_is_dentry_sus_path(dentry))
+ 	{
+ 		if (d_in_lookup(dentry))
+ 			d_lookup_done(dentry);
+@@ -2329,7 +2329,7 @@ static int link_path_walk(const char *name, struct nameidata *nd)
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ 		struct dentry *dentry = nd->path.dentry;
+ 
+-		if (dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
++		if (dentry->d_inode && susfs_is_dentry_sus_path(dentry)) {
+ 			// - No need to dput() here
+ 			// - return -ENOENT here since it is walking the sub path of sus path
+ 			return -ENOENT;
+@@ -3342,7 +3342,7 @@ static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
+ 	dentry = d_lookup(dir, &nd->last);
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ 	if (is_nd_state_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode &&
+-		susfs_is_inode_sus_path(dentry->d_inode))
++		susfs_is_dentry_sus_path(dentry))
+ 	{
+ 		if (d_in_lookup(dentry))
+ 			d_lookup_done(dentry);
+diff --git a/fs/proc/base.c b/fs/proc/base.c
+index 48dd42378..8379c45ed 100644
+--- a/fs/proc/base.c
++++ b/fs/proc/base.c
+@@ -101,6 +101,32 @@
+ #include <linux/cpufreq_times.h>
+ #if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
+ #include <linux/susfs_def.h>
++static inline bool susfs_is_vma_file_sus_map(struct file *f) {
++	struct inode *inode;
++	struct dentry *dentry;
++	const unsigned char *name;
++	unsigned int len;
++	bool match = false;
++	if (!f)
++		return false;
++	inode = file_inode(f);
++	if (SUSFS_IS_INODE_SUS_MAP(inode))
++		return true;
++	if (!inode || !susfs_is_current_untrusted_umounted_app() || __kuid_val(inode->i_uid) >= 10000)
++		return false;
++	dentry = f->f_path.dentry;
++	if (!dentry)
++		return false;
++	rcu_read_lock();
++	name = READ_ONCE(dentry->d_name.name);
++	len = READ_ONCE(dentry->d_name.len);
++	if (sb_rdonly(inode->i_sb))
++		match = unlikely(susfs_is_cusrom_name_len((const char *)name, len));
++	else
++		match = unlikely(susfs_is_cusrom_idmap_len((const char *)name, len));
++	rcu_read_unlock();
++	return match;
++}
+ #endif // #if defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
+ 
+ #include <trace/events/oom.h>
+@@ -2448,7 +2474,7 @@ proc_map_files_readdir(struct file *file, struct dir_context *ctx)
+ 		if (!vma->vm_file)
+ 			continue;
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+-		if (SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
++		if (susfs_is_vma_file_sus_map(vma->vm_file))
+ 			continue;
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		if (++pos <= ctx->pos)
+diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
+index 7c8aafa9d..b67282664 100644
+--- a/fs/proc/task_mmu.c
++++ b/fs/proc/task_mmu.c
+@@ -22,6 +22,32 @@
+ #include <linux/pkeys.h>
+ #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
+ #include <linux/susfs_def.h>
++static inline bool susfs_is_vma_file_sus_map(struct file *f) {
++	struct inode *inode;
++	struct dentry *dentry;
++	const unsigned char *name;
++	unsigned int len;
++	bool match = false;
++	if (!f)
++		return false;
++	inode = file_inode(f);
++	if (SUSFS_IS_INODE_SUS_MAP(inode))
++		return true;
++	if (!inode || !susfs_is_current_untrusted_umounted_app() || __kuid_val(inode->i_uid) >= 10000)
++		return false;
++	dentry = f->f_path.dentry;
++	if (!dentry)
++		return false;
++	rcu_read_lock();
++	name = READ_ONCE(dentry->d_name.name);
++	len = READ_ONCE(dentry->d_name.len);
++	if (sb_rdonly(inode->i_sb))
++		match = unlikely(susfs_is_cusrom_name_len((const char *)name, len));
++	else
++		match = unlikely(susfs_is_cusrom_idmap_len((const char *)name, len));
++	rcu_read_unlock();
++	return match;
++}
+ #endif // #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
+ 
+ #include <asm/elf.h>
+@@ -364,7 +390,7 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
+ 		}
+ #endif // #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+-		if (SUSFS_IS_INODE_SUS_MAP(inode))
++		if (susfs_is_vma_file_sus_map(vma->vm_file))
+ 			return;
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		dev = inode->i_sb->s_dev;
+@@ -946,7 +972,7 @@ static int show_smap(struct seq_file *m, void *v)
+ 
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 	if (vma->vm_file) {
+-		if (SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
++		if (susfs_is_vma_file_sus_map(vma->vm_file))
+ 			return 0;
+ 	}
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+@@ -1014,7 +1040,7 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
+ 
+ 	for (vma = priv->mm->mmap; vma;) {
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+-		if (vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
++		if (vma->vm_file && susfs_is_vma_file_sus_map(vma->vm_file))
+ 			goto bypass_orig_flow;
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		smap_gather_stats(vma, &mss, 0);
+@@ -1084,7 +1110,7 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
+ 			if (vma->vm_end > last_vma_end)
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 			{
+-				if (!vma->vm_file || !(SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file))))
++				if (!vma->vm_file || !(susfs_is_vma_file_sus_map(vma->vm_file)))
+ 					smap_gather_stats(vma, &mss, last_vma_end);
+ 			}
+ #else
+@@ -1813,7 +1839,7 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
+ 			goto out_free;
+ #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		vma = find_vma(mm, start_vaddr);
+-		if (vma && vma->vm_file && SUSFS_IS_INODE_SUS_MAP(file_inode(vma->vm_file)))
++		if (vma && vma->vm_file && susfs_is_vma_file_sus_map(vma->vm_file))
+ 			goto bypass_orig_flow;
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
+ 		ret = walk_page_range(mm, start_vaddr, end, &pagemap_ops, &pm);
+diff --git a/fs/readdir.c b/fs/readdir.c
+index 5813bc37e..3d49ab4a6 100644
+--- a/fs/readdir.c
++++ b/fs/readdir.c
+@@ -164,6 +164,13 @@ static int fillonedir(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->result = verify_dirent_name(name, namlen);
+ 	if (buf->result < 0)
+ 		return buf->result;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	d_ino = ino;
+ 	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+ 		buf->result = -EOVERFLOW;
+@@ -282,6 +289,13 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->error = verify_dirent_name(name, namlen);
+ 	if (unlikely(buf->error))
+ 		return buf->error;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	buf->error = -EINVAL;	/* only used if we fail.. */
+ 	if (reclen > buf->count)
+ 		return -EINVAL;
+@@ -407,6 +421,13 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->error = verify_dirent_name(name, namlen);
+ 	if (unlikely(buf->error))
+ 		return buf->error;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	buf->error = -EINVAL;	/* only used if we fail.. */
+ 	if (reclen > buf->count)
+ 		return -EINVAL;
+@@ -536,6 +557,13 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
+ 	buf->result = verify_dirent_name(name, namlen);
+ 	if (buf->result < 0)
+ 		return buf->result;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	d_ino = ino;
+ 	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+ 		buf->result = -EOVERFLOW;
+@@ -648,6 +676,13 @@ static int compat_filldir(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->error = verify_dirent_name(name, namlen);
+ 	if (unlikely(buf->error))
+ 		return buf->error;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	buf->error = -EINVAL;	/* only used if we fail.. */
+ 	if (reclen > buf->count)
+ 		return -EINVAL;
+diff --git a/fs/susfs.c b/fs/susfs.c
+index 681efc352..35dce479a 100644
+--- a/fs/susfs.c
++++ b/fs/susfs.c
+@@ -217,6 +217,7 @@ static void susfs_run_sus_path_loop(void) {
+ 						cursor->target_pathname, fi->inode.i_ino, fi->inode.i_mapping->flags);
+ 			} else {
+ 				set_bit(AS_FLAGS_SUS_PATH, &inode->i_mapping->flags);
++				set_bit(AS_FLAGS_SUS_MAP, &inode->i_mapping->flags);
+ 				SUSFS_LOGI("re-flag AS_FLAGS_SUS_PATH on path '%s', inode->i_ino: '%lu', inode->i_mapping->flags: 0x%lx\n",
+ 						cursor->target_pathname, inode->i_ino, inode->i_mapping->flags);
+ 			}
+@@ -290,6 +291,36 @@ bool susfs_is_inode_sus_path(struct inode *inode)
+ int susfs_get_data_path(struct path *path) {
+ 	return kern_path("/data", LOOKUP_FOLLOW, path);
+ }
++bool susfs_is_dentry_sus_path(struct dentry *dentry)
++{
++	struct inode *inode;
++	const unsigned char *name;
++	unsigned int len;
++
++	if (!dentry)
++		return false;
++	inode = READ_ONCE(dentry->d_inode);
++	if (!inode)
++		return false;
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    __kuid_val(inode->i_uid) < 10000) {
++		rcu_read_lock();
++		name = READ_ONCE(dentry->d_name.name);
++		len = READ_ONCE(dentry->d_name.len);
++		if (sb_rdonly(dentry->d_sb)) {
++			if (unlikely(susfs_is_cusrom_name_len((const char *)name, len))) {
++				rcu_read_unlock();
++				return true;
++			}
++		} else if (unlikely(susfs_is_cusrom_idmap_len((const char *)name, len))) {
++			rcu_read_unlock();
++			return true;
++		}
++		rcu_read_unlock();
++	}
++	return susfs_is_inode_sus_path(inode);
++}
++
+ #endif // #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+ 
+ /* sus_mount */
+diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
+index 432f596d6..a41d33d1f 100644
+--- a/include/linux/susfs_def.h
++++ b/include/linux/susfs_def.h
+@@ -66,6 +66,7 @@
+ #define TIF_PROC_UMOUNTED 33
+ #define TIF_PROC_NO_SU 34
+ #define TIF_PROC_UMOUNTED_FOR_ZYGOTE_NEXT 35
++#define TIF_PROC_UNTRUSTED_APP 36
+ 
+ #define AS_FLAGS_SUS_PATH 33
+ #define AS_FLAGS_SUS_MOUNT 34
+@@ -161,6 +162,37 @@ static inline void susfs_clear_current_proc_no_su(void) {
+ 	clear_thread_flag(TIF_PROC_NO_SU);
+ }
+ 
++static inline bool susfs_is_current_untrusted_umounted_app(void) {
++	return (likely(test_thread_flag(TIF_PROC_UMOUNTED)) &&
++			likely(test_thread_flag(TIF_PROC_UNTRUSTED_APP)) &&
++			current_uid().val >= 10000);
++}
++
++static inline bool susfs_is_cusrom_name_len(const char *name, int len) {
++	int i;
++	if (unlikely(!name || len < 7))
++		return false;
++	if (unlikely(len == 7 && !memcmp(name, "addon.d", 7)))
++		return true;
++	for (i = 0; i <= len - 7; i++) {
++		if (((name[i]   | 0x20) == 'l') &&
++		    ((name[i+1] | 0x20) == 'i') &&
++		    ((name[i+2] | 0x20) == 'n') &&
++		    ((name[i+3] | 0x20) == 'e') &&
++		    ((name[i+4] | 0x20) == 'a') &&
++		    ((name[i+5] | 0x20) == 'g') &&
++		    ((name[i+6] | 0x20) == 'e'))
++			return true;
++	}
++	return false;
++}
++
++static inline bool susfs_is_cusrom_idmap_len(const char *name, int len) {
++	return (len > 13 &&
++		!memcmp(name + len - 6, "@idmap", 6) &&
++		susfs_is_cusrom_name_len(name, len));
++}
++
+ #define SUSFS_IS_INODE_SUS_MAP(inode) \
+ 		inode && inode->i_mapping && \
+ 		unlikely(test_bit(AS_FLAGS_SUS_MAP, &inode->i_mapping->flags)) && \
+diff --git a/security/selinux/hooks.c b/security/selinux/hooks.c
+index d2566870e..ac680af1d 100644
+--- a/security/selinux/hooks.c
++++ b/security/selinux/hooks.c
+@@ -94,6 +94,9 @@
+ #include <linux/fanotify.h>
+ 
+ #include "avc.h"
++#ifdef CONFIG_KSU_SUSFS
++#include <linux/susfs_def.h>
++#endif
+ #include "objsec.h"
+ #include "netif.h"
+ #include "netnode.h"
+@@ -6576,6 +6579,21 @@ static int selinux_setprocattr(const char *name, void *value, size_t size)
+ 		}
+ 
+ 		tsec->sid = sid;
++#ifdef CONFIG_KSU_SUSFS
++		{
++			struct task_struct *t;
++			bool is_untrusted = (str && (susfs_starts_with(str, "u:r:untrusted_app") ||
++			                             susfs_starts_with(str, "u:r:isolated_app")));
++			rcu_read_lock();
++			for_each_thread(current, t) {
++				if (is_untrusted)
++					set_ti_thread_flag(task_thread_info(t), TIF_PROC_UNTRUSTED_APP);
++				else
++					clear_ti_thread_flag(task_thread_info(t), TIF_PROC_UNTRUSTED_APP);
++			}
++			rcu_read_unlock();
++		}
++#endif
+ 	} else {
+ 		error = -EINVAL;
+ 		goto abort_change;
