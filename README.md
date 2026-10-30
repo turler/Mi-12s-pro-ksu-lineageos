@@ -205,3 +205,52 @@ update: làm **manual**, và nếu commit kernel đổi thì **build lại kerne
 
 _Ghi chú build: boot v3 SHA256 `afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db`,
 ABI diff vs base = 0 dòng, kernel `#7 SMP PREEMPT`._
+
+---
+
+## 7. Hardening nâng cao (giảm dấu vết với app dò root, vd Duck Detector)
+
+Sau khi stack cơ bản chạy ổn, bật thêm các mục dưới để giảm fingerprint custom-ROM mà
+app ngân hàng đời mới có thể quét. Kiểm chứng bằng app **Duck Detector** (`com.eltavine.duckdetector`):
+export báo cáo ra `/sdcard/Download/`, đối chiếu trước/sau.
+
+### 7.1 Bật 2 toggle BRENE (ẩn chuỗi LineageOS ở tầng file)
+Trong `/data/adb/brene/config.sh`:
+```
+config_hide_lineage_strings=1      # redirect *sepolicy.cil, *file_contexts, *.rc chứa "lineage", Updater.xml → file rỗng
+config_spoof_libstagefright=1      # redirect /system/lib64/libstagefright.so → file rỗng
+```
+BRENE dùng `ksu_susfs add_open_redirect <target> <fake> 3` (scheme 3 = chỉ áp cho app bị
+umount, uid≥10000 = chính các app bank), nên **không ảnh hưởng hệ thống** → rủi ro bootloop thấp.
+Cần reboot. Trị được các finding: `nativePolicy *file_contexts hits`, `libstagefright symbol`.
+
+### 7.2 Ẩn thư mục rác trên sdcard của app đã bị HMA giấu
+Vấn đề: HMA ẩn app khỏi PackageManager, nhưng `/sdcard/Android/data/<pkg>` vẫn còn →
+app dò thấy qua FUSE stat và báo "HMA concealment detected" (đỏ). Fix: bật toggle BRENE
+```
+config_hide_ksu_directories=1
+```
+rồi thêm package cần xóa vào `/data/adb/modules/brene/remove_ksu_directory.sh`:
+```
+remove_directory "org.frknkrc44.hma_oss"   # HMA-OSS
+remove_directory "<ksu-manager-package>"   # app KernelSU (kể cả khi đã đổi tên)
+```
+BRENE xóa các thư mục này lúc boot + đặt `inotifyd` tự xóa lại khi chúng tái xuất hiện.
+Chạy sau `boot_completed` nên không gây bootloop.
+> Lưu ý: file `remove_ksu_directory.sh` thuộc BRENE → **sửa lại sau mỗi lần update BRENE**.
+
+### 7.3 Đồng bộ HMA Blacklist cho mọi app nhạy cảm
+Trong `/data/misc/hide_my_applist_*/config.json`, mỗi app bank/VNeID nên dùng CÙNG template
+blacklist (`black vneid`) + CÙNG presets `["custom_rom","root_apps","sus_apps","xposed"]`.
+Template blacklist phải chứa ít nhất: app KernelSU manager, `org.frknkrc44.hma_oss`,
+`com.termux`, và mọi module LSPosed (vd `balti.xposed.pixelifygooglephotos`). Diff block config
+của app đang chạy tốt với app mới trước khi sửa.
+
+### 7.4 Những thứ KHÔNG ẩn được bằng module (giới hạn cứng)
+- **11 service `lineage*` trong ServiceManager** (`lineagehardware`, `lineagehealth`,
+  `vendor.lineage.*`...): mọi app gọi `listServices` đều thấy; chỉ hết khi đổi ROM.
+- **Mount / SELinux "paradox" warning**: heuristic mềm, `/proc/self/mounts` sạch, không phải tell root.
+- **Network Risk**: do đang bật VPN (Tailscale/WARP), không liên quan root.
+
+Các lớp attestation thật mà bank dựa vào (TEE/key attestation, bootloader locked+verified,
+Zygisk, native root, props) đều PASS với stack này — đó mới là phần quyết định.
