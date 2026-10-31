@@ -273,6 +273,6 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 - **Lợi ích:** Triệt tiêu hoàn toàn race condition gây treo boot của ROM LineageOS mà **không cần cài module `lineage_charge_guard` nữa** (có thể gỡ bỏ module này để máy sạch gọn 100%).
 
 ### Kernel v6 (ZeroMount VFS Driver + Enhanced SuSFS Kstat Redirect + Process-Context Supercall)
-- **ZeroMount VFS (, ):** Chuyển hướng đường dẫn file ở tầng VFS (, , , , , , ) với 0 mount point trong .
-- **Enhanced SuSFS (, ):** Hỗ trợ dual-inode kstat redirect cho ZeroMount ().
-- **Process-Context Supercall ():** Chuyển  () ra khỏi atomic kprobe  sang  giúp  trả về  chuẩn xác và triệt tiêu lỗi sleeping-in-atomic khi cập nhật .
+- **ZeroMount VFS (`CONFIG_ZEROMOUNT=y`, `/dev/zeromount`):** Chuyển hướng đường dẫn file ở tầng VFS (`getname`, `d_path`, `readdir`, `statx`, `statfs`, `xattr`, `/proc/PID/maps`) với 0 mount point trong `/proc/mounts`.
+- **Enhanced SuSFS (`CONFIG_KSU_SUSFS_SUS_KSTAT_REDIRECT=y`, `0x55573`):** Hỗ trợ dual-inode kstat redirect cho ZeroMount (`susfs_mode: enhanced`).
+- **Process-Context Supercall (`kernel/reboot.c`):** Chuyển `SUSFS_MAGIC` (`0xFAFAFAFA`) ra khỏi atomic kprobe `reboot_handler_pre` sang `SYSCALL_DEFINE4(reboot)` giúp `SYS_reboot` trả về `0` chuẩn xác và triệt tiêu lỗi sleeping-in-atomic khi cập nhật `open_redirect`.
