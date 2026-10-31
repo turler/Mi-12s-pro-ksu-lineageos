@@ -16,7 +16,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 android-root-bundle/
 ├── README.md                        ← file này
 ├── kernel/
-│   ├── boot_ksun_susfs_v4.img       ← boot image đã build (flash thẳng hoặc fastboot boot test)
+│   ├── boot_ksun_susfs_v5.img       ← boot image đã build (flash thẳng hoặc fastboot boot test)
 │   │                                  SHA256: afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db
 │   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
 ├── modules/
@@ -31,7 +31,7 @@ android-root-bundle/
 
 ### Tự build lại kernel (tuỳ chọn)
 
-File `boot_ksun_susfs_v4.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
+File `boot_ksun_susfs_v5.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
 hoặc khi LineageOS đổi kernel) thì làm như sau trên Linux x86_64:
 
 1. **Lấy source kernel LineageOS cho unicorn**, đúng commit mà ROM stock đang chạy
@@ -103,7 +103,7 @@ Thứ tự lớp phòng thủ của app và module trị từng lớp:
 | Lớp app kiểm tra | Module/giải pháp | Ghi chú |
 |---|---|---|
 | Play Integrity + Key Attestation (keybox) | **AlwaysStrong** (Tricky Store + TEESimulator) | per-app target list |
-| File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v4.img` + module |
+| File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v5.img` + module |
 | Ẩn mount, spoof uname, cấp `ksu_susfs` | **BRENE** | bật, tắt toàn bộ tab ROM |
 | Danh sách app / accessibility | **HMA-OSS** (Zygisk) | VNeID + bank chạy **Blacklist** |
 | **Dấu vết injector Zygisk** (`zygisk_atexit_soinfo`) | **NeoZygisk v2.4** | **thay BreZygisk** — mấu chốt cho MB Bank |
@@ -122,10 +122,10 @@ và `zygisksu` (**NeoZygisk** — thay `rezygisk` đã disable).
 ### Bước 1 — Kernel SuSFS wildcard
 ```
 # Test (không ghi đĩa): vào fastboot rồi
-fastboot boot kernel/boot_ksun_susfs_v4.img
+fastboot boot kernel/boot_ksun_susfs_v5.img
 # → vào hệ thống, mở VNeID kiểm tra OK, rồi mới flash cố định:
-fastboot flash boot_a kernel/boot_ksun_susfs_v4.img
-fastboot flash boot_b kernel/boot_ksun_susfs_v4.img
+fastboot flash boot_a kernel/boot_ksun_susfs_v5.img
+fastboot flash boot_b kernel/boot_ksun_susfs_v5.img
 ```
 (Hoặc flash `AnyKernel3-unicorn-ksun-susfs-v3.zip` qua KSU/recovery nếu đang chạy được.)
 
@@ -267,3 +267,7 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 - **Nguyên nhân kỹ thuật:** LineageOS chạy service `vendor.lineage.health-service.default` dưới quyền user `system` (UID 1000) và dùng vòng lặp vô tận `while (!mChargingEnabledNode)` đòi quyền ghi (`W_OK`) vào node sạc `/sys/class/qcom-battery/input_suspend` (mặc định của kernel là `0644 root:root`). Nếu `ueventd` bị chậm hoặc bận nạp firmware Wi-Fi/Modem, file không kịp chown sang `system:system 0660`, service này sẽ kẹt vĩnh viễn khiến `system_server` bị Android Watchdog giết và kẹt ở màn hình khởi động (quay logo).
 - **Cơ chế fix:** Chạy nền ở giai đoạn `post-fs-data.sh`, thăm dò mỗi 100ms và tự động cấp quyền `0660 system:system` ngay trong mili-giây đầu tiên node sạc vừa xuất hiện.
 - **Lưu ý:** Chỉ cần dùng khi chạy ROM LineageOS (hoặc các ROM fork từ Lineage). Nếu sau này chuyển sang ROM thuần AOSP hoặc HyperOS, chỉ cần gỡ bỏ module này mà không ảnh hưởng gì tới các module khác.
+
+### Kernel v5 (Tích hợp trực tiếp LineageOS Charging Node Quirk vào Kernel)
+- **Điểm mới:** Bổ sung quirk trực tiếp tại `fs/kernfs/inode.c` cấp quyền `R_OK | W_OK` cho user `system` (UID 1000) trên node `/sys/class/qcom-battery/input_suspend` ngay khi node được tạo ra.
+- **Lợi ích:** Triệt tiêu hoàn toàn race condition gây treo boot của ROM LineageOS mà **không cần cài module `lineage_charge_guard` nữa** (có thể gỡ bỏ module này để máy sạch gọn 100%).
