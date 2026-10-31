@@ -262,7 +262,7 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 
 ### Module bổ trợ sửa lỗi riêng của ROM LineageOS
 
-####  (Tùy chọn cho LineageOS)
+#### `lineage_charge_guard-v1.0.zip` (Tùy chọn cho LineageOS)
 - **Mục đích:** Sửa dứt điểm lỗi thiết kế (race condition) của chính ROM **LineageOS** trên Xiaomi 12S Pro (`unicorn`).
 - **Nguyên nhân kỹ thuật:** LineageOS chạy service `vendor.lineage.health-service.default` dưới quyền user `system` (UID 1000) và dùng vòng lặp vô tận `while (!mChargingEnabledNode)` đòi quyền ghi (`W_OK`) vào node sạc `/sys/class/qcom-battery/input_suspend` (mặc định của kernel là `0644 root:root`). Nếu `ueventd` bị chậm hoặc bận nạp firmware Wi-Fi/Modem, file không kịp chown sang `system:system 0660`, service này sẽ kẹt vĩnh viễn khiến `system_server` bị Android Watchdog giết và kẹt ở màn hình khởi động (quay logo).
 - **Cơ chế fix:** Chạy nền ở giai đoạn `post-fs-data.sh`, thăm dò mỗi 100ms và tự động cấp quyền `0660 system:system` ngay trong mili-giây đầu tiên node sạc vừa xuất hiện.
