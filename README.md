@@ -6,7 +6,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 - **Thiết bị:** Xiaomi 12S Pro (`unicorn`), SM8450/SM8475 (SD8+ Gen1)
 - **ROM:** LineageOS 24 (Android 17), SDK 37, `arm64-v8a`
 - **Root:** KernelSU-Next v3.4.2 (`ksud 3.4.2`, uapi 5) + SuSFS v2.3.0
-- **Kernel tuỳ biến:** `5.10.269-gki`, build `#7`, SuSFS wildcard patch v3
+- **Kernel tuỳ biến:** `5.10.269-gki`, build `#14` (Kernel v6: ZeroMount VFS + SuSFS Enhanced + In-kernel Quirks)
 
 ---
 
@@ -16,12 +16,11 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 android-root-bundle/
 ├── README.md                        ← file này
 ├── kernel/
-│   ├── boot_ksun_susfs_v6.img       ← boot image đã build (flash thẳng hoặc fastboot boot test)
-│   │                                  SHA256: afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db
-│   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
+│   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#14) tích hợp ZeroMount VFS + SuSFS Enhanced
+│   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
 ├── modules/
-│   ├── lineage_charge_guard-v1.0.zip   ← Fix lỗi treo boot do race-condition node sạc của LineageOS
-│   └── vneid_persist-v2.2.zip            ← module tự viết: dọn prop + nạp sus_path (chỉ có ở repo này)
+│   ├── vneid_persist-v2.3.zip       ← dọn prop, nạp sus_path/map/loop + bảo vệ 10 file sepolicy/stagefright qua open_redirect
+│   └── lineage_charge_guard-v1.0.zip ← (Đã lỗi thời từ Kernel v5: kernel đã tự tích hợp quirk sạc, không cần cài)
 ├── patches/
 │   ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
 │   ├── 0002-susfs-wildcard-cusrom-untrusted-app.patch                   ← patch wildcard ẩn ROM (v3)
@@ -90,8 +89,8 @@ Repo này chỉ chứa những thứ **đã tự sửa/tự viết** (kernel, pa
 | BRENE | Cấp `ksu_susfs`, ẩn mount, spoof uname | https://github.com/rrr333nnn333/BRENE/releases | — |
 | HMA-OSS (Hide My Applist) | Ẩn danh sách app (cần Zygisk) | https://github.com/frknkrc44/HMA-OSS/releases | — |
 | **AlwaysStrong** (gồm Tricky Store + TEESimulator) | Keybox / key attestation, giả lập TEE theo từng app | https://gitlab.com/Evokerr/AlwaysStrong/-/releases | v1.0.5 |
-| resetprop-rs (tích hợp sẵn trong `vneid_persist` v2.2) | Xoá prop không dấu vết (`--nuke`) + ngủ chờ futex (`--wait`) | https://github.com/Enginex0/resetprop-rs/releases | v0.6.0 |
-| Mountify | Meta-module mount | https://github.com/backslashxx/mountify/releases | — |
+| resetprop-rs (tích hợp sẵn trong `vneid_persist` v2.3) | Xoá prop không dấu vết (`--nuke`) + ngủ chờ futex (`--wait`) | https://github.com/Enginex0/resetprop-rs/releases | v0.6.0 |
+| **ZeroMount** (`meta-zeromount`) | Meta-module VFS mountless (thay thế Mountify/MagicMount) | https://github.com/Enginex0/zeromount/releases | v2.0.216-dev |
 
 
 ---
@@ -110,8 +109,8 @@ Thứ tự lớp phòng thủ của app và module trị từng lớp:
 | Prop `ro.lineage.*`, `adb_root` | **vneid_persist** (service.sh) | dọn mỗi lần boot |
 
 Danh sách module đang BẬT trên máy (tham chiếu):
-`brene`, `hma_oss_zygisk`, `mountify`, `tricky_store` (AlwaysStrong), `vneid_persist`,
-và `zygisksu` (**NeoZygisk** — thay `rezygisk` đã disable).
+`brene`, `hma_oss_zygisk`, `meta-zeromount` (ZeroMount VFS), `ohmyfont`, `tricky_store` (AlwaysStrong), `vneid_persist` (v2.3),
+và `zygisksu` (**NeoZygisk** v2.4).
 
 ---
 
@@ -131,12 +130,12 @@ fastboot flash boot_b kernel/boot_ksun_susfs_v6.img
 
 ### Bước 2 — Root modules cơ bản (qua KernelSU Manager)
 Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
-1. **BRENE** — bật, vào app TẮT toàn bộ tab ROM (`=0`).
-2. **NeoZygisk** (tải từ https://github.com/JingMatrix/NeoZygisk/releases, bản đã test v2.4-289) — injector Zygisk.
-   - Nếu máy đang có BreZygisk/ReZygisk: `touch /data/adb/modules/rezygisk/disable` trước, rồi cài NeoZygisk, reboot.
-3. **HMA-OSS** — module Zygisk ẩn app list.
-4. **AlwaysStrong** (https://gitlab.com/Evokerr/AlwaysStrong/-/releases) — gồm Tricky Store + TEESimulator, keybox attestation.
-5. **vneid_persist** (`modules/vneid_persist-v2.2.zip`) — dọn prop + sus_path.
+1. **BRENE** — bật, cung cấp `ksu_susfs`, ẩn mount.
+2. **NeoZygisk** (v2.4-289) — injector Zygisk độc lập, che giấu hoàn toàn destructor `__cxa_atexit`.
+3. **HMA-OSS** — module Zygisk ẩn app list (Blacklist cho VNeID + Bank).
+4. **AlwaysStrong** — gồm Tricky Store + TEESimulator, xử lý Keybox attestation.
+5. **vneid_persist** (`modules/vneid_persist-v2.3.zip`) — dọn prop, nạp sus_path/map/loop và tự động thiết lập `open_redirect` cho 10 file sepolicy/stagefright.
+6. **ZeroMount** (`meta-zeromount`) — metamodule nạp module qua VFS redirection (dùng nạp `ohmyfont` không để lại mount point).
 
 ### Bước 3 — Reboot, kiểm tra
 Mở VNeID, HSBC, MB Bank. Nếu lỗi, xem mục 4 (Trị theo từng app).
@@ -194,7 +193,7 @@ Fix (v2.2): tích hợp `resetprop-rs` (`bin/resetprop-rs`) vào `vneid_persist`
 ## 5. Rollback
 
 - **Kernel:** `fastboot flash boot_a <boot cũ>` / flash lại stock `boot.img`.
-- **NeoZygisk → BreZygisk:** xóa `/data/adb/modules/zygisksu`, gỡ `disable` của `rezygisk`, reboot.
+- **NeoZygisk:** nếu cần gỡ, chỉ cần xóa thư mục `/data/adb/modules/zygisksu` và reboot.
 - **vneid_persist:** xóa `/data/adb/modules/vneid_persist`, reboot.
 
 ---
