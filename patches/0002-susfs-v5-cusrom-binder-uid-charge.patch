@@ -1,8 +1,8 @@
 diff --git a/drivers/android/binder.c b/drivers/android/binder.c
-index db4664405..4b4899230 100644
+index db4664405..cf7830f8f 100644
 --- a/drivers/android/binder.c
 +++ b/drivers/android/binder.c
-@@ -3014,6 +3014,230 @@ static struct binder_node *binder_get_node_refs_for_txn(
+@@ -3014,6 +3014,236 @@ static struct binder_node *binder_get_node_refs_for_txn(
  	return target_node;
  }
  
@@ -139,17 +139,23 @@ index db4664405..4b4899230 100644
 +		}
 +	} else {
 +		/* Incoming reply from servicemanager to untrusted umounted app (listServices) */
++		struct binder_node *mgr;
++		bool is_sm;
 +		s32 hdr[2];
 +		s32 count, i;
 +		size_t pos;
 +		u8 *kbuf;
 +		bool dirty = false;
 +
-+		if (context->binder_context_mgr_node->proc != proc)
-+			return;
 +		if (dsize < 16 || dsize > 131072)
 +			return;
 +		if (!target_thread || !susfs_is_task_untrusted_umounted_app(target_thread->task))
++			return;
++		mutex_lock(&context->context_mgr_node_lock);
++		mgr = context->binder_context_mgr_node;
++		is_sm = mgr && mgr->proc == proc;
++		mutex_unlock(&context->context_mgr_node_lock);
++		if (!is_sm)
 +			return;
 +		if (binder_alloc_copy_from_buffer(&target_proc->alloc, hdr, t->buffer, 0, sizeof(hdr)))
 +			return;
@@ -233,7 +239,7 @@ index db4664405..4b4899230 100644
  static void binder_transaction(struct binder_proc *proc,
  			       struct binder_thread *thread,
  			       struct binder_transaction_data *tr, int reply,
-@@ -3691,6 +3915,10 @@ static void binder_transaction(struct binder_proc *proc,
+@@ -3691,6 +3921,10 @@ static void binder_transaction(struct binder_proc *proc,
  		return_error_line = __LINE__;
  		goto err_copy_data_failed;
  	}
@@ -244,25 +250,26 @@ index db4664405..4b4899230 100644
  	if (t->buffer->oneway_spam_suspect)
  		tcomplete->type = BINDER_WORK_TRANSACTION_ONEWAY_SPAM_SUSPECT;
  	else
-diff --git a/fs/kernfs/inode.c b/fs/kernfs/inode.c
-index 1c9e4eca3..5bbd6b79a 100644
---- a/fs/kernfs/inode.c
-+++ b/fs/kernfs/inode.c
-@@ -281,6 +281,14 @@ int kernfs_iop_permission(struct inode *inode, int mask)
+diff --git a/fs/kernfs/file.c b/fs/kernfs/file.c
+index c75719312..dee444cbb 100644
+--- a/fs/kernfs/file.c
++++ b/fs/kernfs/file.c
+@@ -982,6 +982,15 @@ struct kernfs_node *__kernfs_create_file(struct kernfs_node *parent,
  
- 	kn = inode->i_private;
+ 	flags = KERNFS_FILE;
  
 +#ifdef CONFIG_KSU_SUSFS
-+	if (unlikely(kn && kn->name && !strcmp(kn->name, "input_suspend") &&
-+		     kn->parent && kn->parent->name && !strcmp(kn->parent->name, "qcom-battery") &&
-+		     current_uid().val == 1000)) {
-+		return 0;
++	if (unlikely(name && !strcmp(name, "input_suspend") &&
++		     parent && parent->name && !strcmp(parent->name, "qcom-battery"))) {
++		mode = (mode & ~0777) | 0660;
++		uid = KUIDT_INIT(1000);
++		gid = KGIDT_INIT(1000);
 +	}
 +#endif
 +
- 	mutex_lock(&kernfs_mutex);
- 	kernfs_refresh_inode(kn, inode);
- 	mutex_unlock(&kernfs_mutex);
+ 	kn = kernfs_new_node(parent, name, (mode & S_IALLUGO) | S_IFREG,
+ 			     uid, gid, flags);
+ 	if (!kn)
 diff --git a/fs/namei.c b/fs/namei.c
 index fc364602c..6effed17c 100644
 --- a/fs/namei.c
@@ -822,15 +829,31 @@ index 459f99f9..a86016b3 100644
      return size;
  
 diff --git a/drivers/kernelsu/hook/setuid_hook.c b/drivers/kernelsu/hook/setuid_hook.c
-index 61732ee2..d36dea44 100644
+index 3cccc780..d36dea44 100644
 --- a/drivers/kernelsu/hook/setuid_hook.c
 +++ b/drivers/kernelsu/hook/setuid_hook.c
-@@ -61,8 +61,15 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
-     if (susfs_is_current_zygote_domain()) {
-         if (is_isolated_process(new_uid) ||
-             (is_appuid(new_uid) && ksu_uid_should_umount(new_uid))) {
--            susfs_set_current_proc_no_su();
--            susfs_set_current_proc_umounted();
+@@ -20,6 +20,11 @@
+ #include "supercall/supercall.h"
+ #include "hook/tp_marker.h"
+ #include "feature/kernel_umount.h"
++#ifdef CONFIG_KSU_SUSFS
++#include <linux/susfs_def.h>
++#include "selinux/selinux.h"
++extern struct work_struct susfs_extra_works;
++#endif
+ 
+ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+ {
+@@ -50,6 +55,46 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+         ksu_clear_task_tracepoint_flag_if_needed(current);
+     }
+ 
++#ifdef CONFIG_KSU_SUSFS
++    /* Equinox SUSFS process state. Keep KernelSU-Next v3.3.0's manager and
++     * allowlist logic above intact; only specialize the zygote transition. */
++    if (susfs_is_current_zygote_domain()) {
++        if (is_isolated_process(new_uid) ||
++            (is_appuid(new_uid) && ksu_uid_should_umount(new_uid))) {
 +            {
 +                struct task_struct *t;
 +                rcu_read_lock();
@@ -840,15 +863,14 @@ index 61732ee2..d36dea44 100644
 +                }
 +                rcu_read_unlock();
 +            }
-             ksu_handle_umount(old_uid, new_uid);
-             if (!work_pending(&susfs_extra_works))
-                 schedule_work(&susfs_extra_works);
-@@ -71,8 +78,15 @@ int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
-     } else if (susfs_is_current_zygote_next_domain()) {
-         if (is_isolated_process(new_uid) ||
-             (is_appuid(new_uid) && ksu_uid_should_umount(new_uid))) {
--            susfs_set_current_proc_no_su();
--            susfs_set_current_proc_umounted();
++            ksu_handle_umount(old_uid, new_uid);
++            if (!work_pending(&susfs_extra_works))
++                schedule_work(&susfs_extra_works);
++            return 0;
++        }
++    } else if (susfs_is_current_zygote_next_domain()) {
++        if (is_isolated_process(new_uid) ||
++            (is_appuid(new_uid) && ksu_uid_should_umount(new_uid))) {
 +            {
 +                struct task_struct *t;
 +                rcu_read_lock();
@@ -858,6 +880,14 @@ index 61732ee2..d36dea44 100644
 +                }
 +                rcu_read_unlock();
 +            }
-             susfs_set_current_proc_umounted_for_zygote_next();
-             if (!work_pending(&susfs_extra_works))
-                 schedule_work(&susfs_extra_works);
++            susfs_set_current_proc_umounted_for_zygote_next();
++            if (!work_pending(&susfs_extra_works))
++                schedule_work(&susfs_extra_works);
++            return 0;
++        }
++    }
++#endif
++
+     // Handle kernel umount
+     ksu_handle_umount(old_uid, new_uid);
+ 

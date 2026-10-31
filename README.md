@@ -269,5 +269,5 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 - **Lưu ý:** Chỉ cần dùng khi chạy ROM LineageOS (hoặc các ROM fork từ Lineage). Nếu sau này chuyển sang ROM thuần AOSP hoặc HyperOS, chỉ cần gỡ bỏ module này mà không ảnh hưởng gì tới các module khác.
 
 ### Kernel v5 (Tích hợp trực tiếp LineageOS Charging Node Quirk vào Kernel)
-- **Điểm mới:** Bổ sung quirk trực tiếp tại `fs/kernfs/inode.c` cấp quyền `R_OK | W_OK` cho user `system` (UID 1000) trên node `/sys/class/qcom-battery/input_suspend` ngay khi node được tạo ra.
+- **Điểm mới:** Bổ sung quirk trực tiếp tại `fs/kernfs/file.c (__kernfs_create_file)` cấp quyền `R_OK | W_OK` cho user `system` (UID 1000) trên node `/sys/class/qcom-battery/input_suspend` ngay khi node được tạo ra.
 - **Lợi ích:** Triệt tiêu hoàn toàn race condition gây treo boot của ROM LineageOS mà **không cần cài module `lineage_charge_guard` nữa** (có thể gỡ bỏ module này để máy sạch gọn 100%).
