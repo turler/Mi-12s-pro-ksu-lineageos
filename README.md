@@ -19,7 +19,7 @@ android-root-bundle/
 │   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#14) tích hợp ZeroMount VFS + SuSFS Enhanced
 │   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
 ├── modules/
-│   ├── vneid_persist-v2.3.zip       ← dọn prop, nạp sus_path/map/loop + bảo vệ 10 file sepolicy/stagefright qua open_redirect
+│   ├── vneid_persist-v2.4.zip       ← dọn prop, nạp sus_path/map/loop + bảo vệ 10 file sepolicy/stagefright qua open_redirect
 │   └── lineage_charge_guard-v1.0.zip ← (Đã lỗi thời từ Kernel v5: kernel đã tự tích hợp quirk sạc, không cần cài)
 ├── patches/
 │   ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
@@ -134,7 +134,7 @@ Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
 2. **NeoZygisk** (v2.4-289) — injector Zygisk độc lập, che giấu hoàn toàn destructor `__cxa_atexit`.
 3. **HMA-OSS** — module Zygisk ẩn app list (Blacklist cho VNeID + Bank).
 4. **AlwaysStrong** — gồm Tricky Store + TEESimulator, xử lý Keybox attestation.
-5. **vneid_persist** (`modules/vneid_persist-v2.3.zip`) — dọn prop, nạp sus_path/map/loop và tự động thiết lập `open_redirect` cho 10 file sepolicy/stagefright.
+5. **vneid_persist** (`modules/vneid_persist-v2.4.zip`) — dọn prop, nạp sus_path/map/loop và tự động thiết lập `open_redirect` cho 10 file sepolicy/stagefright.
 6. **ZeroMount** (`meta-zeromount`) — metamodule nạp module qua VFS redirection (dùng nạp `ohmyfont` không để lại mount point).
 
 ### Bước 3 — Reboot, kiểm tra
