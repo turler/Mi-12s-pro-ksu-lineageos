@@ -20,7 +20,7 @@ android-root-bundle/
 │   │                                  SHA256: afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db
 │   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
 ├── modules/
-│   └── vneid_persist-v2.1.zip            ← module tự viết: dọn prop + nạp sus_path (chỉ có ở repo này)
+│   └── vneid_persist-v2.2.zip            ← module tự viết: dọn prop + nạp sus_path (chỉ có ở repo này)
 ├── patches/
 │   ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
 │   ├── 0002-susfs-wildcard-cusrom-untrusted-app.patch                   ← patch wildcard ẩn ROM (v3)
@@ -89,6 +89,7 @@ Repo này chỉ chứa những thứ **đã tự sửa/tự viết** (kernel, pa
 | BRENE | Cấp `ksu_susfs`, ẩn mount, spoof uname | https://github.com/rrr333nnn333/BRENE/releases | — |
 | HMA-OSS (Hide My Applist) | Ẩn danh sách app (cần Zygisk) | https://github.com/frknkrc44/HMA-OSS/releases | — |
 | **AlwaysStrong** (gồm Tricky Store + TEESimulator) | Keybox / key attestation, giả lập TEE theo từng app | https://gitlab.com/Evokerr/AlwaysStrong/-/releases | v1.0.5 |
+| resetprop-rs (tích hợp sẵn trong `vneid_persist` v2.2) | Xoá prop không dấu vết (`--nuke`) + ngủ chờ futex (`--wait`) | https://github.com/Enginex0/resetprop-rs/releases | v0.6.0 |
 | Mountify | Meta-module mount | https://github.com/backslashxx/mountify/releases | — |
 
 
@@ -134,7 +135,7 @@ Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
    - Nếu máy đang có BreZygisk/ReZygisk: `touch /data/adb/modules/rezygisk/disable` trước, rồi cài NeoZygisk, reboot.
 3. **HMA-OSS** — module Zygisk ẩn app list.
 4. **AlwaysStrong** (https://gitlab.com/Evokerr/AlwaysStrong/-/releases) — gồm Tricky Store + TEESimulator, keybox attestation.
-5. **vneid_persist** (`modules/vneid_persist-v2.1.zip`) — dọn prop + sus_path.
+5. **vneid_persist** (`modules/vneid_persist-v2.2.zip`) — dọn prop + sus_path.
 
 ### Bước 3 — Reboot, kiểm tra
 Mở VNeID, HSBC, MB Bank. Nếu lỗi, xem mục 4 (Trị theo từng app).
@@ -167,8 +168,10 @@ NeoZygisk nạp lại y nguyên các Zygisk module cũ (`tricky_store`, `hma_oss
 ### VNeID lỗi 12 sau nhiều giờ uptime (prop tái sinh)
 `LineageSettingsService` tự tạo lại `sys.lineage_settings_system_version` lúc runtime (dọn lúc boot
 vẫn quay lại sau vài giờ) → VNeID lỗi 12. File `*lineage*@idmap` lúc đó vẫn ẩn tốt (ENOENT).
-Fix (v2.1): `prop_watch.sh` chạy nền 1 instance, cứ 60s xóa mọi prop `lineage|adb_root`.
-Kiểm tra: `pgrep -f vneid_persist/prop_watch.sh` (phải ra đúng 1 pid), log ở `last.log`.
+Fix (v2.2): tích hợp `resetprop-rs` (`bin/resetprop-rs`) vào `vneid_persist`:
+- Dùng `--nuke` thay cho `resetprop -d`: xóa prop nhưng giữ nguyên tổng số lượng prop, điền tên giả hợp lệ và dồn mảnh bộ nhớ `/dev/__properties__/` (chống quét pháp y `Prop area anomalies`).
+- `prop_watch.sh` dùng `resetprop-rs --wait` ngủ đông trên kernel futex (`futex_wait_queue_me`, **0% CPU, 0 polling**) cho cả 3 prop `sys.lineage_settings_{system,secure,global}_version` — thức dậy và `--nuke` ngay sau ~15ms khi prop vừa sinh ra (khép hoàn toàn cửa sổ hở 60s cũ).
+- Kiểm tra: `pgrep -af "resetprop-rs --wait"` (3 waiter đang ngủ futex), log ở `last.log`.
 
 ### HSBC (`vn.hsbc.hsbcvietnam`) — Zimperium `android_serial_banning`
 - **GỠ** khỏi `/data/adb/tricky_store/target.txt`; khóa `vn.hsbc.hsbcvietnam	off` trong
@@ -247,6 +250,7 @@ Template blacklist phải chứa ít nhất: app KernelSU manager, `org.frknkrc4
 của app đang chạy tốt với app mới trước khi sửa.
 
 ### 7.4 Những thứ KHÔNG ẩn được bằng module (giới hạn cứng)
+- **KHÔNG bật `Hide third party apps` (`config_hide_third_party_apps=0`) trong BRENE v0.0.73+**: lệnh `set_priority_uid_filter` của nó gây treo/tự reboot trên kernel hiện tại (đã test thực tế).
 - **11 service `lineage*` trong ServiceManager** (`lineagehardware`, `lineagehealth`,
   `vendor.lineage.*`...): mọi app gọi `listServices` đều thấy; chỉ hết khi đổi ROM.
 - **Mount / SELinux "paradox" warning**: heuristic mềm, `/proc/self/mounts` sạch, không phải tell root.

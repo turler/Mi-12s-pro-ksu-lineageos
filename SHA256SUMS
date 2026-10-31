@@ -1,6 +1,6 @@
 686a6ee06fec91c5822f34930e150a34f4a36456cea98a9bcff165b7102859d5  kernel/AnyKernel3-unicorn-ksun-susfs-v3.zip
 afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db  kernel/boot_ksun_susfs_v3.img
-941271073547e4ea4e9656f55381e38fb50463d8ef02d94f316e2a7c18bb628a  modules/vneid_persist-v2.1.zip
+05285b5429c04f4ce91ca1f2f4ee537e201dc0d33f80a93229aaee170bdc7248  modules/vneid_persist-v2.2.zip
 f577e8ef67c506d97b90dc3c06b5b4558f8219bdd32df0d9efd3b0d31ac91de1  patches/0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch
 3b51989a5f207cda93fa511f80df59aacb0b657da0939455c222e89ea38f643d  patches/0002-susfs-wildcard-cusrom-untrusted-app.patch
 abf9e3d308cc4f4dca60ea7871524d1523ca8694ec2c532df730aa5c2bd33aa1  patches/KERNEL_PATCH_REVIEW.md
