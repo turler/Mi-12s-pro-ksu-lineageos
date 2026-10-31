@@ -16,7 +16,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 android-root-bundle/
 ├── README.md                        ← file này
 ├── kernel/
-│   ├── boot_ksun_susfs_v3.img       ← boot image đã build (flash thẳng hoặc fastboot boot test)
+│   ├── boot_ksun_susfs_v4.img       ← boot image đã build (flash thẳng hoặc fastboot boot test)
 │   │                                  SHA256: afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db
 │   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
 ├── modules/
@@ -30,7 +30,7 @@ android-root-bundle/
 
 ### Tự build lại kernel (tuỳ chọn)
 
-File `boot_ksun_susfs_v3.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
+File `boot_ksun_susfs_v4.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
 hoặc khi LineageOS đổi kernel) thì làm như sau trên Linux x86_64:
 
 1. **Lấy source kernel LineageOS cho unicorn**, đúng commit mà ROM stock đang chạy
@@ -102,7 +102,7 @@ Thứ tự lớp phòng thủ của app và module trị từng lớp:
 | Lớp app kiểm tra | Module/giải pháp | Ghi chú |
 |---|---|---|
 | Play Integrity + Key Attestation (keybox) | **AlwaysStrong** (Tricky Store + TEESimulator) | per-app target list |
-| File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v3.img` + module |
+| File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v4.img` + module |
 | Ẩn mount, spoof uname, cấp `ksu_susfs` | **BRENE** | bật, tắt toàn bộ tab ROM |
 | Danh sách app / accessibility | **HMA-OSS** (Zygisk) | VNeID + bank chạy **Blacklist** |
 | **Dấu vết injector Zygisk** (`zygisk_atexit_soinfo`) | **NeoZygisk v2.4** | **thay BreZygisk** — mấu chốt cho MB Bank |
@@ -121,10 +121,10 @@ và `zygisksu` (**NeoZygisk** — thay `rezygisk` đã disable).
 ### Bước 1 — Kernel SuSFS wildcard
 ```
 # Test (không ghi đĩa): vào fastboot rồi
-fastboot boot kernel/boot_ksun_susfs_v3.img
+fastboot boot kernel/boot_ksun_susfs_v4.img
 # → vào hệ thống, mở VNeID kiểm tra OK, rồi mới flash cố định:
-fastboot flash boot_a kernel/boot_ksun_susfs_v3.img
-fastboot flash boot_b kernel/boot_ksun_susfs_v3.img
+fastboot flash boot_a kernel/boot_ksun_susfs_v4.img
+fastboot flash boot_b kernel/boot_ksun_susfs_v4.img
 ```
 (Hoặc flash `AnyKernel3-unicorn-ksun-susfs-v3.zip` qua KSU/recovery nếu đang chạy được.)
 
