@@ -20,6 +20,7 @@ android-root-bundle/
 │   │                                  SHA256: afccf86ce48f36f483d32863355726f89a847125b4be6f1ecd99e0eeb09c72db
 │   └── AnyKernel3-unicorn-ksun-susfs-v3.zip  ← bản zip flash qua recovery/KSU (cùng kernel)
 ├── modules/
+│   ├── lineage_charge_guard-v1.0.zip   ← Fix lỗi treo boot do race-condition node sạc của LineageOS
 │   └── vneid_persist-v2.2.zip            ← module tự viết: dọn prop + nạp sus_path (chỉ có ở repo này)
 ├── patches/
 │   ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
@@ -258,3 +259,11 @@ của app đang chạy tốt với app mới trước khi sửa.
 
 Các lớp attestation thật mà bank dựa vào (TEE/key attestation, bootloader locked+verified,
 Zygisk, native root, props) đều PASS với stack này — đó mới là phần quyết định.
+
+### Module bổ trợ sửa lỗi riêng của ROM LineageOS
+
+####  (Tùy chọn cho LineageOS)
+- **Mục đích:** Sửa dứt điểm lỗi thiết kế (race condition) của chính ROM **LineageOS** trên Xiaomi 12S Pro (`unicorn`).
+- **Nguyên nhân kỹ thuật:** LineageOS chạy service `vendor.lineage.health-service.default` dưới quyền user `system` (UID 1000) và dùng vòng lặp vô tận `while (!mChargingEnabledNode)` đòi quyền ghi (`W_OK`) vào node sạc `/sys/class/qcom-battery/input_suspend` (mặc định của kernel là `0644 root:root`). Nếu `ueventd` bị chậm hoặc bận nạp firmware Wi-Fi/Modem, file không kịp chown sang `system:system 0660`, service này sẽ kẹt vĩnh viễn khiến `system_server` bị Android Watchdog giết và kẹt ở màn hình khởi động (quay logo).
+- **Cơ chế fix:** Chạy nền ở giai đoạn `post-fs-data.sh`, thăm dò mỗi 100ms và tự động cấp quyền `0660 system:system` ngay trong mili-giây đầu tiên node sạc vừa xuất hiện.
+- **Lưu ý:** Chỉ cần dùng khi chạy ROM LineageOS (hoặc các ROM fork từ Lineage). Nếu sau này chuyển sang ROM thuần AOSP hoặc HyperOS, chỉ cần gỡ bỏ module này mà không ảnh hưởng gì tới các module khác.
