@@ -672,7 +672,7 @@ index 7c8aafa9d..bd06525ee 100644
  #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
  		ret = walk_page_range(mm, start_vaddr, end, &pagemap_ops, &pm);
 diff --git a/fs/readdir.c b/fs/readdir.c
-index 5813bc37e..de50d0a10 100644
+index 5813bc37e..be8130f1b 100644
 --- a/fs/readdir.c
 +++ b/fs/readdir.c
 @@ -21,6 +21,9 @@
@@ -685,7 +685,35 @@ index 5813bc37e..de50d0a10 100644
  
  #include <asm/unaligned.h>
  
-@@ -348,6 +351,13 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -164,6 +167,13 @@ static int fillonedir(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->result = verify_dirent_name(name, namlen);
+ 	if (buf->result < 0)
+ 		return buf->result;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	d_ino = ino;
+ 	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+ 		buf->result = -EOVERFLOW;
+@@ -282,6 +292,13 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->error = verify_dirent_name(name, namlen);
+ 	if (unlikely(buf->error))
+ 		return buf->error;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	buf->error = -EINVAL;	/* only used if we fail.. */
+ 	if (reclen > buf->count)
+ 		return -EINVAL;
+@@ -348,6 +365,13 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
  	if (!f.file)
  		return -EBADF;
  
@@ -699,7 +727,7 @@ index 5813bc37e..de50d0a10 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
  	if (f.file->f_inode->i_sb->s_magic == FUSE_SUPER_MAGIC) {
  		path_err = susfs_get_data_path(&path);
-@@ -363,6 +373,9 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -363,6 +387,9 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
  	error = iterate_dir(f.file, &buf.ctx);
  	if (error >= 0)
  		error = buf.error;
@@ -709,7 +737,7 @@ index 5813bc37e..de50d0a10 100644
  	if (buf.prev_reclen) {
  		struct linux_dirent __user * lastdirent;
  		lastdirent = (void __user *)buf.current_dir - buf.prev_reclen;
-@@ -372,6 +385,15 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -372,6 +399,15 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
  		else
  			error = count - buf.count;
  	}
@@ -725,7 +753,21 @@ index 5813bc37e..de50d0a10 100644
  	fdput_pos(f);
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
  	if (!path_err)
-@@ -469,6 +491,13 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
+@@ -407,6 +443,13 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->error = verify_dirent_name(name, namlen);
+ 	if (unlikely(buf->error))
+ 		return buf->error;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	buf->error = -EINVAL;	/* only used if we fail.. */
+ 	if (reclen > buf->count)
+ 		return -EINVAL;
+@@ -469,6 +512,13 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
  	if (!f.file)
  		return -EBADF;
  
@@ -739,7 +781,7 @@ index 5813bc37e..de50d0a10 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
  	if (f.file->f_inode->i_sb->s_magic == FUSE_SUPER_MAGIC) {
  		path_err = susfs_get_data_path(&path);
-@@ -484,6 +513,9 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
+@@ -484,6 +534,9 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
  	error = iterate_dir(f.file, &buf.ctx);
  	if (error >= 0)
  		error = buf.error;
@@ -749,7 +791,7 @@ index 5813bc37e..de50d0a10 100644
  	if (buf.prev_reclen) {
  		struct linux_dirent64 __user * lastdirent;
  		typeof(lastdirent->d_off) d_off = buf.ctx.pos;
-@@ -494,6 +526,15 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
+@@ -494,6 +547,15 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
  		else
  			error = count - buf.count;
  	}
@@ -765,7 +807,35 @@ index 5813bc37e..de50d0a10 100644
  	fdput_pos(f);
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
  	if (!path_err)
-@@ -713,6 +754,13 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -536,6 +598,13 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
+ 	buf->result = verify_dirent_name(name, namlen);
+ 	if (buf->result < 0)
+ 		return buf->result;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	d_ino = ino;
+ 	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
+ 		buf->result = -EOVERFLOW;
+@@ -648,6 +717,13 @@ static int compat_filldir(struct dir_context *ctx, const char *name, int namlen,
+ 	buf->error = verify_dirent_name(name, namlen);
+ 	if (unlikely(buf->error))
+ 		return buf->error;
++#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++	if (susfs_is_current_untrusted_umounted_app() &&
++	    ((sb_rdonly(buf->sb) && unlikely(susfs_is_cusrom_name_len(name, namlen))) ||
++	     unlikely(susfs_is_cusrom_idmap_len(name, namlen)))) {
++		return 0;
++	}
++#endif
+ 	buf->error = -EINVAL;	/* only used if we fail.. */
+ 	if (reclen > buf->count)
+ 		return -EINVAL;
+@@ -713,6 +789,13 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
  	if (!f.file)
  		return -EBADF;
  
@@ -779,7 +849,7 @@ index 5813bc37e..de50d0a10 100644
  #ifdef CONFIG_KSU_SUSFS_SUS_PATH
  	if (f.file->f_inode->i_sb->s_magic == FUSE_SUPER_MAGIC) {
  		path_err = susfs_get_data_path(&path);
-@@ -728,6 +776,9 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -728,6 +811,9 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
  	error = iterate_dir(f.file, &buf.ctx);
  	if (error >= 0)
  		error = buf.error;
@@ -789,7 +859,7 @@ index 5813bc37e..de50d0a10 100644
  	if (buf.prev_reclen) {
  		struct compat_linux_dirent __user * lastdirent;
  		lastdirent = (void __user *)buf.current_dir - buf.prev_reclen;
-@@ -737,6 +788,15 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -737,6 +823,15 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
  		else
  			error = count - buf.count;
  	}
@@ -950,7 +1020,7 @@ index 75e262c06..8aa75ac48 100644
  #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
  
 diff --git a/fs/susfs.c b/fs/susfs.c
-index 681efc352..d2844539a 100644
+index 681efc352..b5d8397cf 100644
 --- a/fs/susfs.c
 +++ b/fs/susfs.c
 @@ -217,6 +217,7 @@ static void susfs_run_sus_path_loop(void) {
@@ -961,6 +1031,15 @@ index 681efc352..d2844539a 100644
  				SUSFS_LOGI("re-flag AS_FLAGS_SUS_PATH on path '%s', inode->i_ino: '%lu', inode->i_mapping->flags: 0x%lx\n",
  						cursor->target_pathname, inode->i_ino, inode->i_mapping->flags);
  			}
+@@ -241,7 +242,7 @@ bool susfs_is_inode_sus_path(struct inode *inode)
+ #endif
+ {
+ 	struct fuse_inode *fi = NULL;
+-	if (!susfs_is_current_proc_umounted_app()) {
++	if (!susfs_is_current_untrusted_umounted_app()) {
+ 		return false;
+ 	}
+ 	if (!inode->i_mapping) {
 @@ -290,6 +291,36 @@ bool susfs_is_inode_sus_path(struct inode *inode)
  int susfs_get_data_path(struct path *path) {
  	return kern_path("/data", LOOKUP_FOLLOW, path);
@@ -1272,7 +1351,7 @@ index 58128c796..f62bacdef 100644
  
  /* spoof_uname */
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
-index 432f596d6..326991776 100644
+index 432f596d6..35ab528a5 100644
 --- a/include/linux/susfs_def.h
 +++ b/include/linux/susfs_def.h
 @@ -20,6 +20,7 @@
@@ -1353,6 +1432,13 @@ index 432f596d6..326991776 100644
  #define SUSFS_IS_INODE_SUS_MAP(inode) \
  		inode && inode->i_mapping && \
  		unlikely(test_bit(AS_FLAGS_SUS_MAP, &inode->i_mapping->flags)) && \
+@@ -173,5 +230,5 @@ static inline void susfs_clear_current_proc_no_su(void) {
+ #define SUSFS_IS_INODE_OPEN_REDIRECT(inode) \
+ 		inode && inode->i_mapping && \
+ 		unlikely(test_bit(AS_FLAGS_OPEN_REDIRECT, &inode->i_mapping->flags)) && \
+-		susfs_is_current_proc_umounted_app()
++		susfs_is_current_untrusted_umounted_app()
+ #endif // #ifndef KSU_SUSFS_DEF_H
 diff --git a/kernel/kallsyms.c b/kernel/kallsyms.c
 index a03ac4cac..6909b94ea 100644
 --- a/kernel/kallsyms.c
