@@ -6,7 +6,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 - **Thiết bị:** Xiaomi 12S Pro (`unicorn`), SM8450/SM8475 (SD8+ Gen1)
 - **ROM:** LineageOS 24 (Android 17), SDK 37, `arm64-v8a`
 - **Root:** KernelSU-Next v3.4.2 (`ksud 3.4.2`, uapi 5) + SuSFS v2.3.0
-- **Kernel tuỳ biến:** `5.10.269-gki`, build `#17` (Kernel v6: ZeroMount VFS + SuSFS Enhanced + In-kernel Quirks)
+- **Kernel tuỳ biến:** `5.10.269-gki`, build `#18` (Kernel v6: ZeroMount VFS + SuSFS Enhanced + In-kernel Quirks)
 
 ---
 
@@ -16,7 +16,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 android-root-bundle/
 ├── README.md                        ← file này
 ├── kernel/
-│   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#17) tích hợp ZeroMount VFS + SuSFS Enhanced
+│   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#18) tích hợp ZeroMount VFS + SuSFS Enhanced
 │   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
 ├── modules/
 │   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect

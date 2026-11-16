@@ -3233,7 +3233,7 @@ index 000000000..35bc3bdec
 +
 +#endif /* _LINUX_ZEROMOUNT_H */
 diff --git a/drivers/kernelsu/feature/selinux_hide.c b/drivers/kernelsu/feature/selinux_hide.c
-index 459f99f9..a86016b3 100644
+index 459f99f9..393edcc1 100644
 --- a/drivers/kernelsu/feature/selinux_hide.c
 +++ b/drivers/kernelsu/feature/selinux_hide.c
 @@ -23,6 +23,10 @@
@@ -3247,7 +3247,18 @@ index 459f99f9..a86016b3 100644
  #include "klog.h" // IWYU pragma: keep
  #include "linux/kallsyms.h"
  #include "objsec.h"
-@@ -297,7 +301,20 @@ static int __nocfi my_setprocattr(const char *name, void *value, size_t size)
+@@ -176,6 +180,10 @@ static ssize_t my_write_access(struct file *file, char *buf, size_t size)
+     }
+ 
+     security_compute_av_user_with_policy(backup_sepolicy, ssid, tsid, tclass, &avd);
++    if (unlikely(strstr(tcon, ":su:") || strstr(scon, ":su:") ||
++                 strstr(tcon, ":adbroot:") || strstr(scon, ":adbroot:"))) {
++        avd.allowed = 0;
++    }
+ 
+     // stock reads 1; a loader load_policy may have bumped the backup before we load
+     avd.seqno = 1;
+@@ -297,7 +305,20 @@ static int __nocfi my_setprocattr(const char *name, void *value, size_t size)
      }
  
      tsec->sid = sid;
@@ -3269,6 +3280,16 @@ index 459f99f9..a86016b3 100644
      commit_creds(new);
      return size;
  
+@@ -673,6 +694,9 @@ static int string_to_context_struct(struct policydb *pol, struct policydb *orig_
+     orig_oldc = *orig_p;
+     *orig_p++ = *p++ = 0;
+ 
++    if (unlikely(!strcmp(scontextp, "adbroot")))
++        goto out;
++
+     typdatum = symtab_search(&pol->p_types, scontextp);
+     orig_typdatum = symtab_search(&orig_pol->p_types, orig_scontextp);
+     if (!typdatum || typdatum->attribute)
 diff --git a/drivers/kernelsu/hook/setuid_hook.c b/drivers/kernelsu/hook/setuid_hook.c
 index 3cccc780..d36dea44 100644
 --- a/drivers/kernelsu/hook/setuid_hook.c
