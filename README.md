@@ -6,7 +6,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 - **Thiết bị:** Xiaomi 12S Pro (`unicorn`), SM8450/SM8475 (SD8+ Gen1)
 - **ROM:** LineageOS 24 (Android 17), SDK 37, `arm64-v8a`
 - **Root:** KernelSU-Next v3.4.2 (`ksud 3.4.2`, uapi 5) + SuSFS v2.3.0
-- **Kernel tuỳ biến:** `5.10.269-gki`, build `#18` (Kernel v6: ZeroMount VFS + SuSFS Enhanced + In-kernel Quirks)
+- **Kernel tuỳ biến:** `5.10.269-gki`, build `#20` (Kernel v6: ZeroMount VFS + SuSFS Enhanced + In-kernel Quirks)
 
 ---
 
@@ -16,7 +16,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 android-root-bundle/
 ├── README.md                        ← file này
 ├── kernel/
-│   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#18) tích hợp ZeroMount VFS + SuSFS Enhanced
+│   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#20) tích hợp ZeroMount VFS + SuSFS Enhanced
 │   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
 ├── modules/
 │   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect
@@ -275,3 +275,4 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 - **ZeroMount VFS (`CONFIG_ZEROMOUNT=y`, `/dev/zeromount`):** Chuyển hướng đường dẫn file ở tầng VFS (`getname`, `d_path`, `readdir`, `statx`, `statfs`, `xattr`, `/proc/PID/maps`) với 0 mount point trong `/proc/mounts`.
 - **Enhanced SuSFS (`CONFIG_KSU_SUSFS_SUS_KSTAT_REDIRECT=y`, `0x55573`):** Hỗ trợ dual-inode kstat redirect cho ZeroMount (`susfs_mode: enhanced`).
 - **Process-Context Supercall (`kernel/reboot.c`):** Chuyển `SUSFS_MAGIC` (`0xFAFAFAFA`) ra khỏi atomic kprobe `reboot_handler_pre` sang `SYSCALL_DEFINE4(reboot)` giúp `SYS_reboot` trả về `0` chuẩn xác và triệt tiêu lỗi sleeping-in-atomic khi cập nhật `open_redirect`.
+- **SELinux Hide (`selinux_hide.c`):** Ẩn trace userdebug của LineageOS (`adbroot`, `shell -> su`) và tối ưu `security_context_to_sid_with_policy` (stack buffer + chỉ parse `backup_sepolicy` trước khi chạm `orig_policy`) để khử bất đối xứng timing `app_zygote` `attr/current` (A−B ≤ 0 ns).
