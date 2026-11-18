@@ -20,6 +20,7 @@ android-root-bundle/
 │   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
 ├── modules/
 │   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect
+│   ├── hide-developer-options-1.1.1-boot-safe.zip ← giữ Dev options/USB debugging BẬT qua reboot mà không bị Duck Detector warning Mount; tắt tạm khi mở app trong packages.txt
 │   └── lineage_charge_guard-v1.0.zip ← (Đã lỗi thời từ Kernel v5: kernel đã tự tích hợp quirk sạc, không cần cài)
 ├── patches/
 │   ├── 0001-unicorn-integrate-KernelSU-Next-v3.4.2-SuSFS-v2.3.0-.patch  ← ghép KSU-Next + SuSFS
@@ -136,6 +137,11 @@ Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
 4. **AlwaysStrong** — gồm Tricky Store + TEESimulator, xử lý Keybox attestation.
 5. **vneid_persist** (`modules/vneid_persist-v2.5.zip`) — dọn prop, nạp sus_path/map/loop (bảo toàn 3 APK hệ thống cho AppZygote) và tự động thiết lập `open_redirect` cho 9 file sepolicy/file_contexts/Updater.xml.
 6. **ZeroMount** (`meta-zeromount`) — metamodule nạp module qua VFS redirection (dùng nạp `ohmyfont` không để lại mount point).
+
+7. **Hide Developer Options** (`modules/hide-developer-options-1.1.1-boot-safe.zip`, sửa từ jksalcedo 1.0) — chỉ cần nếu muốn để Dev options + USB debugging bật.
+   - Vì sao: bật Dev options + USB debugging lúc tắt máy ⇒ `persist.sys.usb.config=adb` khiến adbd chạy trước zygote ⇒ process isolated lệch mount namespace ⇒ Duck Detector Mount "Cross-process mount views: 2 view(s)". BRENE (`config_developer_options=0`) tắt options ở boot-completed nhưng đã muộn.
+   - Module: `post-fs-data` bỏ `adb` khỏi `persist.sys.usb.config` + đặt 3 setting về 0 trong `settings_global.xml` (backup `settings_global.bak`), để trống 3 key dev/usb/wireless của BRENE; ~30 s sau boot bật lại theo `desired.state`.
+   - Cài lần đầu: bật Dev options/USB debugging tay một lần (hoặc ghi sẵn `/data/adb/hide_developer_options/desired.state`). Thêm `com.eltavine.duckdetector` (và app cần che) vào `/data/adb/hide_developer_options/packages.txt` để hết warning ADB Runtime / System Properties khi quét. Log: `/data/adb/hide_developer_options/log.txt`.
 
 ### Bước 3 — Reboot, kiểm tra
 Mở VNeID, HSBC, MB Bank. Nếu lỗi, xem mục 4 (Trị theo từng app).
