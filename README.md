@@ -19,7 +19,7 @@ android-root-bundle/
 │   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#20) tích hợp ZeroMount VFS + SuSFS Enhanced
 │   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
 ├── modules/
-│   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect
+│   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect + Action xoá cache verdict cũ của VNeID
 │   ├── hide-developer-options-1.1.1-boot-safe.zip ← giữ Dev options/USB debugging BẬT qua reboot mà không bị Duck Detector warning Mount; tắt tạm khi mở app trong packages.txt
 │   └── lineage_charge_guard-v1.0.zip ← (Đã lỗi thời từ Kernel v5: kernel đã tự tích hợp quirk sạc, không cần cài)
 ├── patches/
@@ -135,7 +135,8 @@ Cài theo thứ tự, reboot sau mỗi nhóm nếu manager yêu cầu:
 2. **NeoZygisk** (v2.4-289) — injector Zygisk độc lập, che giấu hoàn toàn destructor `__cxa_atexit`.
 3. **HMA-OSS** — module Zygisk ẩn app list (Blacklist cho VNeID + Bank).
 4. **AlwaysStrong** — gồm Tricky Store + TEESimulator, xử lý Keybox attestation.
-5. **vneid_persist** (`modules/vneid_persist-v2.5.zip`) — dọn prop, nạp sus_path/map/loop (bảo toàn 3 APK hệ thống cho AppZygote) và tự động thiết lập `open_redirect` cho 9 file sepolicy/file_contexts/Updater.xml.
+5. **vneid_persist** (`modules/vneid_persist-v2.6.zip`) — dọn prop, nạp sus_path/map/loop (bảo toàn 3 APK hệ thống cho AppZygote) và tự động thiết lập `open_redirect` cho 9 file sepolicy/file_contexts/Updater.xml.
+   - **Action (v2.6):** KernelSU Manager → Module → vneid_persist → nút Action = dừng VNeID, xoá 2 file verdict BShield (`cmwoawp.ogg`, `xwoccmwldwasxm.dat`) + `cache/*` + `app_webview/*`; giữ `SKS_*` (đăng nhập/sinh trắc). Dùng khi VNeID còn báo mã lỗi cũ; mở lại app để BShield kiểm tra lại (file tự sinh lại).
 6. **ZeroMount** (`meta-zeromount`) — metamodule nạp module qua VFS redirection (dùng nạp `ohmyfont` không để lại mount point).
 
 7. **Hide Developer Options** (`modules/hide-developer-options-1.1.1-boot-safe.zip`, sửa từ jksalcedo 1.0) — chỉ cần nếu muốn để Dev options + USB debugging bật.
