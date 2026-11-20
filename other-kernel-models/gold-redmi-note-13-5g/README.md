@@ -35,6 +35,7 @@ Các script còn đường dẫn cứng `/home/minhdc/kbuild-gold` và `SYSTEM_T
 
 ## Trạng thái
 
-- Build `work/final` đã chạy trên máy gold, `vpnhide_kmod` v1.3.1 (android15-6.6) nạp được bằng `insmod`.
+- Máy gold đang chạy một kernel tự build từ cây này (`CONFIG_KSU=y`, `SYSTEM_TRUSTED_KEYS` trỏ vào cert stock, `/proc/version` = `6.6.143-android15-8`). Chưa đối chiếu hash Image đang chạy với build `work/final` (09:51 20/11), nên chưa khẳng định hai bản giống hệt nhau.
+- `vpnhide_kmod` v1.3.1 (android15-6.6, bản dựng sẵn) nạp được bằng `insmod` trên kernel này; hook đăng ký đủ, chưa kiểm tra ẩn VPN thật.
 - Chưa kèm boot image / AnyKernel zip. Boot image nằm ở máy build, cần dựng lại hoặc xuất riêng.
 - Kernel chỉ dùng cho đúng máy gold. Không flash lên máy khác.
