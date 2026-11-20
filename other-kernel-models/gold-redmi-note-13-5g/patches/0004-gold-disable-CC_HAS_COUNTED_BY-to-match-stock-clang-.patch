@@ -1,0 +1,26 @@
+From 648b959f7bc58bd7ddf10e33e94921d3c20ead98 Mon Sep 17 00:00:00 2001
+From: nyx <nyx@local>
+Date: Wed, 18 Nov 2026 22:25:24 +0700
+Subject: [PATCH 4/5] gold: disable CC_HAS_COUNTED_BY to match stock clang-18
+ modversions CRCs (icc_* ABI)
+
+---
+ init/Kconfig | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/init/Kconfig b/init/Kconfig
+index 0c7e9e9cd1f6..58458b5d4900 100644
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -115,6 +115,8 @@ config CC_HAS_COUNTED_BY
+ 	# https://github.com/llvm/llvm-project/pull/110497
+ 	# https://github.com/llvm/llvm-project/pull/112636
+ 	depends on !(CC_IS_CLANG && CLANG_VERSION < 190103)
++	# gold: stock kernel was built with clang 18 (no counted_by); keep genksyms CRCs identical
++	depends on BROKEN
+ 
+ config PAHOLE_VERSION
+ 	int
+-- 
+2.34.1
+

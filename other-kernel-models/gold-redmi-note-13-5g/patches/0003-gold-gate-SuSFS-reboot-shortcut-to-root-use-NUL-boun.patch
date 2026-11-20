@@ -1,0 +1,145 @@
+From 0ce748ad79fb086114471ac0f8cd3f36a6e1aa8f Mon Sep 17 00:00:00 2001
+From: flamint <minhdaochi504@gmail.com>
+Date: Wed, 18 Nov 2026 20:18:32 +0700
+Subject: [PATCH 3/5] gold: gate SuSFS reboot shortcut to root; use NUL-bounded
+ d_name.name scan instead of racy d_name.len
+
+---
+ drivers/kernelsu/supercall/supercall.c | 2 +-
+ fs/proc/base.c                         | 6 ++----
+ fs/proc/task_mmu.c                     | 6 ++----
+ fs/susfs.c                             | 6 ++----
+ include/linux/susfs_def.h              | 9 +++++++++
+ kernel/reboot.c                        | 3 ++-
+ 6 files changed, 18 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/kernelsu/supercall/supercall.c b/drivers/kernelsu/supercall/supercall.c
+index 6ecb629d388d..1a8cab3a9bfb 100644
+--- a/drivers/kernelsu/supercall/supercall.c
++++ b/drivers/kernelsu/supercall/supercall.c
+@@ -132,7 +132,7 @@ int ksu_susfs_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void _
+     if (magic1 != KSU_INSTALL_MAGIC1 || magic2 != SUSFS_MAGIC)
+         return -EINVAL;
+     if (current_uid().val != 0)
+-        return 0;
++        return -EPERM;
+ 
+     switch (cmd) {
+ #ifdef CONFIG_KSU_SUSFS_SUS_PATH
+diff --git a/fs/proc/base.c b/fs/proc/base.c
+index f88cda58eced..3e4fa1bec436 100644
+--- a/fs/proc/base.c
++++ b/fs/proc/base.c
+@@ -107,7 +107,6 @@ static inline bool susfs_is_vma_file_sus_map(struct file *f) {
+ 	struct inode *inode;
+ 	struct dentry *dentry;
+ 	const unsigned char *name;
+-	unsigned int len;
+ 	bool match = false;
+ 	if (!f)
+ 		return false;
+@@ -121,11 +120,10 @@ static inline bool susfs_is_vma_file_sus_map(struct file *f) {
+ 		return false;
+ 	rcu_read_lock();
+ 	name = READ_ONCE(dentry->d_name.name);
+-	len = READ_ONCE(dentry->d_name.len);
+ 	if (sb_rdonly(inode->i_sb))
+-		match = unlikely(susfs_is_cusrom_name_len((const char *)name, len));
++		match = unlikely(susfs_is_cusrom_name_nul((const char *)name));
+ 	else
+-		match = unlikely(susfs_is_cusrom_idmap_len((const char *)name, len));
++		match = unlikely(susfs_is_cusrom_idmap_nul((const char *)name));
+ 	rcu_read_unlock();
+ 	return match;
+ }
+diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
+index bf4fd22c1468..96f5b47cdde1 100644
+--- a/fs/proc/task_mmu.c
++++ b/fs/proc/task_mmu.c
+@@ -29,7 +29,6 @@ static inline bool susfs_is_vma_file_sus_map(struct file *f) {
+ 	struct inode *inode;
+ 	struct dentry *dentry;
+ 	const unsigned char *name;
+-	unsigned int len;
+ 	bool match = false;
+ 	if (!f)
+ 		return false;
+@@ -43,11 +42,10 @@ static inline bool susfs_is_vma_file_sus_map(struct file *f) {
+ 		return false;
+ 	rcu_read_lock();
+ 	name = READ_ONCE(dentry->d_name.name);
+-	len = READ_ONCE(dentry->d_name.len);
+ 	if (sb_rdonly(inode->i_sb))
+-		match = unlikely(susfs_is_cusrom_name_len((const char *)name, len));
++		match = unlikely(susfs_is_cusrom_name_nul((const char *)name));
+ 	else
+-		match = unlikely(susfs_is_cusrom_idmap_len((const char *)name, len));
++		match = unlikely(susfs_is_cusrom_idmap_nul((const char *)name));
+ 	rcu_read_unlock();
+ 	return match;
+ }
+diff --git a/fs/susfs.c b/fs/susfs.c
+index ca73a0537a78..1c552cff8b34 100644
+--- a/fs/susfs.c
++++ b/fs/susfs.c
+@@ -430,7 +430,6 @@ bool susfs_is_dentry_sus_path(struct dentry *dentry)
+ {
+ 	struct inode *inode;
+ 	const unsigned char *name;
+-	unsigned int len;
+ 
+ 	if (!dentry)
+ 		return false;
+@@ -441,13 +440,12 @@ bool susfs_is_dentry_sus_path(struct dentry *dentry)
+ 	    __kuid_val(inode->i_uid) < 10000) {
+ 		rcu_read_lock();
+ 		name = READ_ONCE(dentry->d_name.name);
+-		len = READ_ONCE(dentry->d_name.len);
+ 		if (sb_rdonly(dentry->d_sb)) {
+-			if (unlikely(susfs_is_cusrom_name_len((const char *)name, len))) {
++			if (unlikely(susfs_is_cusrom_name_nul((const char *)name))) {
+ 				rcu_read_unlock();
+ 				return true;
+ 			}
+-		} else if (unlikely(susfs_is_cusrom_idmap_len((const char *)name, len))) {
++		} else if (unlikely(susfs_is_cusrom_idmap_nul((const char *)name))) {
+ 			rcu_read_unlock();
+ 			return true;
+ 		}
+diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
+index a739ca68e946..69e0e1804763 100644
+--- a/include/linux/susfs_def.h
++++ b/include/linux/susfs_def.h
+@@ -204,6 +204,15 @@ static inline bool susfs_is_cusrom_idmap_len(const char *name, int len) {
+ 		susfs_is_cusrom_name_len(name, len));
+ }
+ 
++/* For d_name.name read under RCU: never trust d_name.len (can race with rename), scan to NUL bounded by NAME_MAX. */
++static inline bool susfs_is_cusrom_name_nul(const char *name) {
++	return name && susfs_is_cusrom_name_len(name, strnlen(name, NAME_MAX));
++}
++
++static inline bool susfs_is_cusrom_idmap_nul(const char *name) {
++	return name && susfs_is_cusrom_idmap_len(name, strnlen(name, NAME_MAX));
++}
++
+ #define SUSFS_IS_INODE_SUS_MAP(inode) \
+ 		inode && inode->i_mapping && \
+ 		unlikely(test_bit(AS_FLAGS_SUS_MAP, &inode->i_mapping->flags)) && \
+diff --git a/kernel/reboot.c b/kernel/reboot.c
+index fece576df6f4..a771c8ab6124 100644
+--- a/kernel/reboot.c
++++ b/kernel/reboot.c
+@@ -713,7 +713,8 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
+ 	int ret = 0;
+ 
+ #ifdef CONFIG_KSU_SUSFS
+-	if (magic1 == 0xDEADBEEF && magic2 == 0xFAFAFAFA)
++	if (magic1 == 0xDEADBEEF && magic2 == 0xFAFAFAFA &&
++	    uid_eq(current_uid(), GLOBAL_ROOT_UID))
+ 		return ksu_susfs_handle_sys_reboot(magic1, magic2, cmd, &arg);
+ #endif
+ 
+-- 
+2.34.1
+
