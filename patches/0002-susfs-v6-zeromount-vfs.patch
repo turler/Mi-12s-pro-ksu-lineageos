@@ -1515,6 +1515,32 @@ index d2566870e..2f96d3432 100644
  	} else {
  		error = -EINVAL;
  		goto abort_change;
+diff --git a/security/selinux/ss/policydb.c b/security/selinux/ss/policydb.c
+index 7b509536f..d70bde811 100644
+--- a/security/selinux/ss/policydb.c
++++ b/security/selinux/ss/policydb.c
+@@ -2534,6 +2534,10 @@ int policydb_read(struct policydb *p, void *fp)
+ 		rc = ebitmap_read(&p->policycaps, fp);
+ 		if (rc)
+ 			goto bad;
++		if (ebitmap_get_bit(&p->policycaps, 9)) {
++			p->android_netlink_route = 1;
++			p->android_netlink_getneigh = 1;
++		}
+ 	}
+ 
+ 	if (p->policyvers >= POLICYDB_VERSION_PERMISSIVE) {
+@@ -3676,6 +3680,10 @@ int policydb_write(struct policydb *p, void *fp)
+ 		config |= REJECT_UNKNOWN;
+ 	if (p->allow_unknown)
+ 		config |= ALLOW_UNKNOWN;
++	if (p->android_netlink_route)
++		config |= POLICYDB_CONFIG_ANDROID_NETLINK_ROUTE;
++	if (p->android_netlink_getneigh)
++		config |= POLICYDB_CONFIG_ANDROID_NETLINK_GETNEIGH;
+ 
+ 	/* Write the magic number and string identifiers. */
+ 	buf[0] = cpu_to_le32(POLICYDB_MAGIC);
 diff --git a/fs/zeromount.c b/fs/zeromount.c
 new file mode 100644
 index 000000000..b6313ae32
@@ -3233,7 +3259,7 @@ index 000000000..35bc3bdec
 +
 +#endif /* _LINUX_ZEROMOUNT_H */
 diff --git a/drivers/kernelsu/feature/selinux_hide.c b/drivers/kernelsu/feature/selinux_hide.c
-index 459f99f9..54a63a3a 100644
+index 459f99f9..f968ea7d 100644
 --- a/drivers/kernelsu/feature/selinux_hide.c
 +++ b/drivers/kernelsu/feature/selinux_hide.c
 @@ -23,6 +23,10 @@
@@ -3280,7 +3306,7 @@ index 459f99f9..54a63a3a 100644
      commit_creds(new);
      return size;
  
-@@ -600,171 +621,127 @@ void ksu_selinux_hide_drop_backup_if_unused()
+@@ -600,171 +621,136 @@ void ksu_selinux_hide_drop_backup_if_unused()
  /*
   * Caveat:  Mutates scontext.
   */
@@ -3371,8 +3397,17 @@ index 459f99f9..54a63a3a 100644
 -    *orig_p++ = *p++ = 0;
 +    *p++ = 0;
 +
-+    if (unlikely(!strcmp(scontextp, "adbroot")))
-+        goto out;
++    if (unlikely(!strcmp(scontextp, "adbroot") ||
++                 !strcmp(scontextp, "ksu") ||
++                 !strcmp(scontextp, "ksu_file"))) {
++        static const char ksu_timing_pad[] = "duck_detector_invalid";
++        const char *q = ksu_timing_pad;
++        while (*q && *q != ':') {
++            asm volatile("" : "+r"(q));
++            q++;
++        }
++        scontextp = (char *)ksu_timing_pad;
++    }
  
      typdatum = symtab_search(&pol->p_types, scontextp);
 -    orig_typdatum = symtab_search(&orig_pol->p_types, orig_scontextp);
