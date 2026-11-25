@@ -6,7 +6,7 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 - **Thiết bị:** Xiaomi 12S Pro (`unicorn`), SM8450/SM8475 (SD8+ Gen1)
 - **ROM:** LineageOS 24 (Android 17), SDK 37, `arm64-v8a`
 - **Root:** KernelSU-Next v3.4.2 (`ksud 3.4.2`, uapi 5) + SuSFS v2.3.0
-- **Kernel tuỳ biến:** `5.10.269-gki`, build `#21` (Kernel v6: ZeroMount VFS + SuSFS Enhanced + In-kernel Quirks)
+- **Kernel tuỳ biến:** `5.10.269-gki`, build `#23` (Kernel v7: ZeroMount VFS + SuSFS Enhanced + SELinux Timing Fix + In-kernel Quirks)
 
 ---
 
@@ -16,8 +16,8 @@ root KernelSU-Next + SuSFS, bền vững qua reboot.
 android-root-bundle/
 ├── README.md                        ← file này
 ├── kernel/
-│   ├── boot_ksun_susfs_v6.img       ← boot image Kernel v6 (#21) tích hợp ZeroMount VFS + SuSFS Enhanced
-│   └── AnyKernel3-unicorn-ksun-susfs-v6.zip  ← bản zip flash qua recovery/KSU (Kernel v6)
+│   ├── boot_ksun_susfs_v7.img       ← boot image Kernel v7 (#23) fix KSU SELinux context timing + ZeroMount VFS + SuSFS Enhanced
+│   └── AnyKernel3-unicorn-ksun-susfs-v7.zip  ← bản zip flash qua recovery/KSU (Kernel v7)
 ├── modules/
 │   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect + Action xoá cache verdict cũ của VNeID
 │   ├── hide-developer-options-1.1.1-boot-safe.zip ← giữ Dev options/USB debugging BẬT qua reboot mà không bị Duck Detector warning Mount; tắt tạm khi mở app trong packages.txt
@@ -31,7 +31,7 @@ android-root-bundle/
 
 ### Tự build lại kernel (tuỳ chọn)
 
-File `boot_ksun_susfs_v6.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
+File `boot_ksun_susfs_v7.img` trong repo dùng được luôn. Muốn tự build (ví dụ để kiểm chứng,
 hoặc khi LineageOS đổi kernel) thì làm như sau trên Linux x86_64:
 
 1. **Lấy source kernel LineageOS cho unicorn**, đúng commit mà ROM stock đang chạy
@@ -103,7 +103,7 @@ Thứ tự lớp phòng thủ của app và module trị từng lớp:
 | Lớp app kiểm tra | Module/giải pháp | Ghi chú |
 |---|---|---|
 | Play Integrity + Key Attestation (keybox) | **AlwaysStrong** (Tricky Store + TEESimulator) | per-app target list |
-| File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v6.img` + module |
+| File ROM/su, `/proc/self/maps` | **Kernel SuSFS wildcard v3** + **vneid_persist** | `boot_ksun_susfs_v7.img` + module |
 | Ẩn mount, spoof uname, cấp `ksu_susfs` | **BRENE** | bật, tắt toàn bộ tab ROM |
 | Danh sách app / accessibility | **HMA-OSS** (Zygisk) | VNeID + bank chạy **Blacklist** |
 | **Dấu vết injector Zygisk** (`zygisk_atexit_soinfo`) | **NeoZygisk v2.4** | **thay BreZygisk** — mấu chốt cho MB Bank |
@@ -122,10 +122,10 @@ và `zygisksu` (**NeoZygisk** v2.4).
 ### Bước 1 — Kernel SuSFS wildcard
 ```
 # Test (không ghi đĩa): vào fastboot rồi
-fastboot boot kernel/boot_ksun_susfs_v6.img
+fastboot boot kernel/boot_ksun_susfs_v7.img
 # → vào hệ thống, mở VNeID kiểm tra OK, rồi mới flash cố định:
-fastboot flash boot_a kernel/boot_ksun_susfs_v6.img
-fastboot flash boot_b kernel/boot_ksun_susfs_v6.img
+fastboot flash boot_a kernel/boot_ksun_susfs_v7.img
+fastboot flash boot_b kernel/boot_ksun_susfs_v7.img
 ```
 (Hoặc flash `AnyKernel3-unicorn-ksun-susfs-v3.zip` qua KSU/recovery nếu đang chạy được.)
 
@@ -285,3 +285,7 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 - **SELinux Hide (`selinux_hide.c`):** Ẩn trace userdebug của LineageOS (`adbroot`, `shell -> su`) và tối ưu `security_context_to_sid_with_policy` (stack buffer + chỉ parse `backup_sepolicy` trước khi chạm `orig_policy`) để khử bất đối xứng timing `app_zygote` `attr/current` (A−B ≤ 0 ns).
 - **SELinux KSU Context Timing Parity (`selinux_hide.c`, build `#21`):** Chuẩn hoá đường đi quét chuỗi và hash lookup của `"ksu"`/`"ksu_file"`/`"adbroot"` trong `string_to_context_struct_single` theo `"duck_detector_invalid"` (21 ký tự, bucket `3482`), triệt tiêu độ lệch `-173 ns` của probe `ksu_types timing with invalid types` (raw selinuxfs write & `setprocattr` trên CPU 0 Cortex-A510).
 - **Android 17 `netlink_xperm` -> `nlmsg_readpriv`/`nlmsg_getneigh` (`security/selinux/ss/policydb.c`, build `#21`):** Ánh xạ policy capability bit 9 (`netlink_xperm` của `secilc` Android 17) sang `p->android_netlink_route = 1` và `p->android_netlink_getneigh = 1` trong `policydb_read()` và bảo toàn 2 cờ `POLICYDB_CONFIG_ANDROID_NETLINK_*` trong `policydb_write()`, chặn đứng `AF_NETLINK MAC Leak` (`RTM_GETLINK`) và `AF_NETLINK Neighbor Leak` (`RTM_GETNEIGH`) từ `untrusted_app`.
+
+### Kernel v7 (Fix SELinux KSU Context Timing trên Duck Detector Build 1124+, build `#23`)
+- **Nguyên nhân từ v6 (`#21`):** Bản Duck Detector mới hơn so sánh cặp chuỗi cùng độ dài 3 ký tự (`u:r:ksu:s0` vs `u:r:inv:s0`). Vòng lặp `ksu_timing_pad` 21 ký tự (`"duck_detector_invalid"`) trong `string_to_context_struct_single()` của v6 khiến `"ksu"` chậm hơn `"inv"` khoảng **+104 ns** (~2 tick ARM64 `cntvct_el0`) trên cả `/sys/fs/selinux/context` lẫn `setprocattr` (`/proc/self/attr/current`).
+- **Fix (`drivers/kernelsu/feature/selinux_hide.c`):** Bỏ `"ksu"`, `"ksu_file"` (vốn đã không tồn tại trong `backup_sepolicy` trước khi KernelSU nạp rule) và xoá vòng lặp `ksu_timing_pad`, chỉ giữ lại chặn `"adbroot"`. Cả `"ksu"` và `"inv"` nay đi chung đúng 1 nhánh `symtab_search()` 3 byte trên `backup_sepolicy`, triệt tiêu hoàn toàn cảnh báo đỏ `Enforcing with KSU context timing anomaly` (đã test thực tế trên Mi 12S Pro + ABI `vmlinux.symvers` diff 0 dòng).
