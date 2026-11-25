@@ -20,6 +20,7 @@ android-root-bundle/
 │   └── AnyKernel3-unicorn-ksun-susfs-v7.zip  ← bản zip flash qua recovery/KSU (Kernel v7)
 ├── modules/
 │   ├── vneid_persist-v2.5.zip       ← dọn prop, nạp sus_path/map/loop (an toàn cho AppZygote) + bảo vệ 9 file sepolicy/file_contexts qua open_redirect + Action xoá cache verdict cũ của VNeID
+│   ├── DuckUSB-Zygisk-2.2.0-no-adbd-contradiction.zip ← bản DuckUSB 2.2.0 đã vá service.sh (bỏ spoof init.svc.adbd=stopped, tránh lỗi đỏ ADB Runtime contradiction trên Duck Detector; vẫn ẩn USB debugging & giữ System Properties xanh)
 │   ├── hide-developer-options-1.1.1-boot-safe.zip ← giữ Dev options/USB debugging BẬT qua reboot mà không bị Duck Detector warning Mount; tắt tạm khi mở app trong packages.txt
 │   └── lineage_charge_guard-v1.0.zip ← (Đã lỗi thời từ Kernel v5: kernel đã tự tích hợp quirk sạc, không cần cài)
 ├── patches/
@@ -289,3 +290,8 @@ Zygisk, native root, props) đều PASS với stack này — đó mới là ph�
 ### Kernel v7 (Fix SELinux KSU Context Timing trên Duck Detector Build 1124+, build `#23`)
 - **Nguyên nhân từ v6 (`#21`):** Bản Duck Detector mới hơn so sánh cặp chuỗi cùng độ dài 3 ký tự (`u:r:ksu:s0` vs `u:r:inv:s0`). Vòng lặp `ksu_timing_pad` 21 ký tự (`"duck_detector_invalid"`) trong `string_to_context_struct_single()` của v6 khiến `"ksu"` chậm hơn `"inv"` khoảng **+104 ns** (~2 tick ARM64 `cntvct_el0`) trên cả `/sys/fs/selinux/context` lẫn `setprocattr` (`/proc/self/attr/current`).
 - **Fix (`drivers/kernelsu/feature/selinux_hide.c`):** Bỏ `"ksu"`, `"ksu_file"` (vốn đã không tồn tại trong `backup_sepolicy` trước khi KernelSU nạp rule) và xoá vòng lặp `ksu_timing_pad`, chỉ giữ lại chặn `"adbroot"`. Cả `"ksu"` và `"inv"` nay đi chung đúng 1 nhánh `symtab_search()` 3 byte trên `backup_sepolicy`, triệt tiêu hoàn toàn cảnh báo đỏ `Enforcing with KSU context timing anomaly` (đã test thực tế trên Mi 12S Pro + ABI `vmlinux.symvers` diff 0 dòng).
+
+### Module `DuckUSB-Zygisk-2.2.0-no-adbd-contradiction.zip`
+- **Nguồn gốc:** Vá từ `DuckUSB-Zygisk-2.2.0-release.zip` (cập nhật lại SHA256 trong `customize.d/00-verify-resources.sh` để cài đặt chuẩn qua KSU/Magisk).
+- **Vấn đề bản gốc:** `service.sh` ép `resetprop -n init.svc.adbd stopped` trong khi tiến trình `adbd` vẫn đang chạy thật → mâu thuẫn với `/dev/socket/adbd` và abstract socket `@jdwp-control` khiến Duck Detector nâng từ Warning vàng lên **Danger đỏ** (`ADB Runtime: 2 runtime contradiction(s)`).
+- **Bản vá:** Bỏ `init.svc.adbd=stopped` khỏi `LIST` (chỉ giữ mask `persist.sys.usb.config=mtp` và `sys.usb.state=mtp`, đổi `WAIT_KEY` sang `sys.usb.state`). Kết quả: `System Properties` vẫn xanh, mọi app vẫn đọc `adb_enabled=0` / `development_settings_enabled=0`, và hết hoàn toàn lỗi đỏ `ADB Runtime` contradiction.
