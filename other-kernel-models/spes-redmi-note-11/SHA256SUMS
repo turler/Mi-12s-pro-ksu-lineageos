@@ -1,0 +1,7 @@
+9599ed146e3dc29b179aeca3ed6f2ed529a1dc81d606c6ff16425fcc057887ee  README.md
+fcb69ad026c90051f9a3ab20673620c8ca2c70a7aceab4ca75369985c83e407d  configs/ksu-susfs.config
+d76577d075c6facb4fe307d839eeae2f09975e3dcbfedcfdd1a8a7c18d924736  kernel/boot_spes_ksun_susfs_v8.img
+70b83296632648dbfd512cfef9504ef4714a1b99cef5bb6e92f08206e9e0cf4b  modules/susfs4ksu-spes-vneid-v1.0.zip
+7619ec1e1af148c6cbd1bef52c6d8e9fc688f9f6a92b10a3a088442717994525  patches/0001-spes-kernel-4.19-ksun-susfs-v1.5.5-selinux-cusrom-v8.patch
+58b314a7bc7bbb287adedfcc8b66ae55e48200233e795895e85cdcd923814222  patches/0002-ksunext-legacy-susfs-bridge-selinux-hide-setuid-v8.patch
+dec4abaa9032ac82abc2610cdb68af0dcff2443df8ea13529177ee9b844cedb0  scripts/build.sh
